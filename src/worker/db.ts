@@ -245,9 +245,8 @@ export async function loadSettings(db: D1Database): Promise<Settings> {
   const token = m.get('inbox_token') ?? (await getInboxToken(db));
   const domain = m.get('inbox_domain') || null;
   return {
-    year_basis: (m.get('year_basis') === 'payment_date'
-      ? 'payment_date'
-      : 'service_date') as YearBasis,
+    // Always: a receipt counts in the year of its service date, or its payment date if it has none.
+    year_basis: 'service_date' as YearBasis,
     hsa_cards: arr(m.get('hsa_card_last4_json')),
     family_names: arr(m.get('family_names_json')),
     inbox_domain: domain,

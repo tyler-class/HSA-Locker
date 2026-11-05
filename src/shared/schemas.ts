@@ -30,7 +30,6 @@ export const categoryInput = z.object({
 export const categoryPatch = categoryInput.partial();
 
 export const settingsPatch = z.object({
-  year_basis: z.enum(['service_date', 'payment_date']).optional(),
   hsa_cards: z
     .array(z.string().regex(/^\d{4}$/, 'Card numbers are the last 4 digits.'))
     .max(20)

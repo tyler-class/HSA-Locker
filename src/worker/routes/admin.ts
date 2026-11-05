@@ -95,7 +95,6 @@ admin.patch('/settings', async (c) => {
   const db = c.env.DB;
   const stmts: D1PreparedStatement[] = [];
   const set = (k: string, v: string) => stmts.push(setSettingStmt(db, k, v));
-  if (input.year_basis) set('year_basis', input.year_basis);
   if (input.hsa_cards) set('hsa_card_last4_json', JSON.stringify([...new Set(input.hsa_cards)]));
   if (input.family_names) set('family_names_json', JSON.stringify(input.family_names));
   if (input.inbox_domain !== undefined) set('inbox_domain', input.inbox_domain ?? '');

@@ -136,7 +136,7 @@ export function Onboarding() {
             Receipts paid with these cards were already paid from your HSA, so they aren’t counted
             as reimbursable. You can undo this per receipt.
           </p>
-          <div className="flex gap-2">
+          <div className="flex w-full gap-2 sm:w-1/2">
             <TextInput
               inputMode="numeric"
               maxLength={4}

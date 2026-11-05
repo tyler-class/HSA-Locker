@@ -2,7 +2,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { exportFilename, extForMime, uniqueNames } from '@shared/logic';
-import type { YearBasis } from '@shared/types';
 import { AboutButton } from '../components/AboutSheet';
 import { Icon } from '../components/Icon';
 import { InstallHint } from '../components/InstallHint';
@@ -246,7 +245,7 @@ export function Settings() {
           ))}
         </div>
         <form
-          className="flex gap-2"
+          className="flex w-full gap-2 sm:w-1/2"
           onSubmit={async (e) => {
             e.preventDefault();
             if (card.length !== 4) return;
@@ -265,16 +264,6 @@ export function Settings() {
             Add
           </GhostButton>
         </form>
-        <span className="pt-2 text-ink">Count a receipt in the year of its</span>
-        <Segmented<YearBasis>
-          label="Year basis"
-          value={s.year_basis}
-          onChange={(year_basis) => run(() => api.patch('/settings', { year_basis }))}
-          options={[
-            ['service_date', 'Service date'],
-            ['payment_date', 'Payment date'],
-          ]}
-        />
         <ErrorText>{error}</ErrorText>
       </div>
 
