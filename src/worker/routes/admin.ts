@@ -1,0 +1,557 @@
+// App state, settings, people, providers, categories, backup/restore, sample data, danger zone.
+import { Hono } from 'hono';
+import { applyHsaCards, withAlias } from '@shared/logic';
+import { PERSON_COLORS } from '@shared/lookups';
+import {
+  categoryInput,
+  categoryPatch,
+  deleteAllInput,
+  personInput,
+  personPatch,
+  providerInput,
+  providerMerge,
+  providerPatch,
+  settingsPatch,
+} from '@shared/schemas';
+import {
+  EXPORT_FORMAT,
+  EXPORT_VERSION,
+  PRIVATE_SETTINGS,
+  TABLE_ORDER,
+  isHsaExport,
+  rowValues,
+  type ExportRow,
+  type HsaExport,
+} from '@shared/exportFormat';
+import type { AppState } from '@shared/types';
+import {
+  all,
+  first,
+  insertStmt,
+  loadCategories,
+  loadPeople,
+  loadProviders,
+  loadSettings,
+  newId,
+  nowIso,
+  setSettingStmt,
+  toEntry,
+  toPerson,
+  toProvider,
+  updateStmt,
+} from '../db';
+import { getProvider, providerMisconfigured } from '../extract/providers';
+import sample from '../../../seed/sample.json';
+import { refreshDocs } from '../status';
+import { ApiError, body, notFound, type AppEnv } from './util';
+
+export const admin = new Hono<AppEnv>();
+
+admin.get('/state', async (c) => {
+  const db = c.env.DB;
+  const [settings, people, providers, categories, counts] = await Promise.all([
+    loadSettings(db),
+    loadPeople(db),
+    loadProviders(db),
+    loadCategories(db),
+    first<Record<string, number>>(
+      db,
+      `SELECT
+        (SELECT COUNT(*) FROM documents d WHERE d.status = 'needs_review'
+           OR (d.status != 'discarded' AND EXISTS (SELECT 1 FROM entries e WHERE e.document_id = d.id AND e.review_reasons_json != '[]'))) AS review_documents,
+        (SELECT COUNT(*) FROM entries e JOIN documents d ON d.id = e.document_id
+           WHERE d.status != 'discarded' AND e.review_reasons_json != '[]') AS review_entries,
+        (SELECT COUNT(*) FROM documents WHERE status IN ('pending', 'processing')) AS in_flight,
+        (SELECT COUNT(*) FROM documents WHERE status = 'failed') AS failed,
+        (SELECT COUNT(*) FROM documents WHERE status != 'discarded') AS documents`,
+    ),
+  ]);
+  const p = getProvider(c.env);
+  const state: AppState = {
+    settings,
+    people,
+    providers,
+    categories,
+    counts: {
+      review_documents: Number(counts?.review_documents ?? 0),
+      review_entries: Number(counts?.review_entries ?? 0),
+      in_flight: Number(counts?.in_flight ?? 0),
+      failed: Number(counts?.failed ?? 0),
+      documents: Number(counts?.documents ?? 0),
+    },
+    ai: {
+      provider: providerMisconfigured(c.env) ? `${p.id} (LLM_API_KEY missing)` : p.id,
+      text_model: p.textModel,
+      vision_model: p.visionModel,
+      third_party: p.thirdParty,
+      gateway: c.env.AI_GATEWAY_ID || c.env.AI_GATEWAY_URL ? 'on' : null,
+    },
+  };
+  return c.json(state);
+});
+
+admin.patch('/settings', async (c) => {
+  const input = await body(c, settingsPatch);
+  const db = c.env.DB;
+  const stmts: D1PreparedStatement[] = [];
+  const set = (k: string, v: string) => stmts.push(setSettingStmt(db, k, v));
+  if (input.year_basis) set('year_basis', input.year_basis);
+  if (input.hsa_cards) set('hsa_card_last4_json', JSON.stringify([...new Set(input.hsa_cards)]));
+  if (input.family_names) set('family_names_json', JSON.stringify(input.family_names));
+  if (input.inbox_domain !== undefined) set('inbox_domain', input.inbox_domain ?? '');
+  if (input.inbox_paused !== undefined) set('inbox_paused', input.inbox_paused ? '1' : '0');
+  if (input.inbox_min_kb !== undefined) set('inbox_min_kb', String(input.inbox_min_kb));
+  if (input.inbox_max_attachments !== undefined)
+    set('inbox_max_attachments', String(input.inbox_max_attachments));
+  if (input.inbox_max_mb !== undefined) set('inbox_max_mb', String(input.inbox_max_mb));
+  if (input.inbox_daily_cap !== undefined) set('inbox_daily_cap', String(input.inbox_daily_cap));
+  if (input.inbox_allowlist) set('inbox_allowlist_json', JSON.stringify(input.inbox_allowlist));
+  if (input.onboarded !== undefined) set('onboarded', input.onboarded ? '1' : '0');
+  if (stmts.length) await db.batch(stmts);
+
+  // A changed card list re-applies paid_with_hsa to receipts (automatic exclusions only).
+  if (input.hsa_cards) {
+    const rows = (
+      await all(
+        db,
+        "SELECT * FROM entries WHERE type = 'receipt' AND (card_last4 IS NOT NULL OR excluded_auto = 1)",
+      )
+    ).map(toEntry);
+    const updates = rows
+      .map((e) => ({ e, next: applyHsaCards(e, input.hsa_cards!) }))
+      .filter(({ e, next }) => next.excluded_reason !== e.excluded_reason);
+    if (updates.length)
+      await db.batch(
+        updates.map(({ e, next }) =>
+          updateStmt(db, 'entries', e.id, {
+            excluded_reason: next.excluded_reason,
+            excluded_auto: next.excluded_auto ? 1 : 0,
+          }),
+        ),
+      );
+  }
+  return c.json(await loadSettings(db));
+});
+
+// ---------- people ----------
+
+admin.post('/people', async (c) => {
+  const input = await body(c, personInput);
+  const db = c.env.DB;
+  const count = (await first<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM people'))?.n ?? 0;
+  const now = nowIso();
+  const id = newId();
+  await insertStmt(db, 'people', {
+    id,
+    name: input.name,
+    relationship: input.relationship ?? null,
+    aliases_json: JSON.stringify(input.aliases ?? []),
+    color: input.color ?? PERSON_COLORS[count % PERSON_COLORS.length],
+    sort_order: input.sort_order ?? count,
+    created_at: now,
+    updated_at: now,
+  }).run();
+  return c.json(toPerson((await first(db, 'SELECT * FROM people WHERE id = ?', id))!), 201);
+});
+
+admin.patch('/people/:id', async (c) => {
+  const input = await body(c, personPatch);
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  if (!(await first(db, 'SELECT 1 FROM people WHERE id = ?', id))) throw notFound('Person');
+  const fields: Record<string, unknown> = {};
+  if (input.name !== undefined) fields.name = input.name;
+  if (input.relationship !== undefined) fields.relationship = input.relationship;
+  if (input.aliases !== undefined) fields.aliases_json = JSON.stringify(input.aliases);
+  if (input.color !== undefined) fields.color = input.color;
+  if (input.sort_order !== undefined) fields.sort_order = input.sort_order;
+  if (Object.keys(fields).length) await updateStmt(db, 'people', id, fields).run();
+  return c.json(toPerson((await first(db, 'SELECT * FROM people WHERE id = ?', id))!));
+});
+
+/**
+ * Adds an alias to a person and resolves every unknown_patient entry whose printed name it now
+ * matches (the "add as alias to X" action in Review).
+ */
+admin.post('/people/:id/alias', async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const { alias } = (await c.req.json().catch(() => ({}))) as { alias?: string };
+  if (!alias?.trim()) throw new ApiError(400, 'invalid', 'alias: Required');
+  const row = await first(db, 'SELECT * FROM people WHERE id = ?', id);
+  if (!row) throw notFound('Person');
+  const p = toPerson(row);
+  await updateStmt(db, 'people', id, {
+    aliases_json: JSON.stringify(withAlias(p.name, p.aliases, alias)),
+  }).run();
+  const resolved = await assignPersonByName(db, id, alias);
+  return c.json({
+    person: toPerson((await first(db, 'SELECT * FROM people WHERE id = ?', id))!),
+    resolved,
+  });
+});
+
+/** Points unassigned entries printed with this name at the person and clears that reason. */
+async function assignPersonByName(db: D1Database, personId: string, name: string): Promise<number> {
+  const rows = (
+    await all(
+      db,
+      'SELECT * FROM entries WHERE person_id IS NULL AND lower(trim(patient_name_raw)) = lower(trim(?))',
+      name,
+    )
+  ).map(toEntry);
+  if (!rows.length) return 0;
+  await db.batch(
+    rows.map((e) =>
+      updateStmt(db, 'entries', e.id, {
+        person_id: personId,
+        review_reasons_json: JSON.stringify(
+          e.review_reasons.filter((r) => r !== 'unknown_patient' && r !== 'missing_patient'),
+        ),
+      }),
+    ),
+  );
+  await refreshDocs(
+    db,
+    rows.map((e) => e.document_id),
+  );
+  return rows.length;
+}
+
+admin.post('/people/from-name', async (c) => {
+  // "Add as new person" from Review: creates the person and assigns matching entries.
+  const input = await body(c, personInput);
+  const db = c.env.DB;
+  const now = nowIso();
+  const count = (await first<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM people'))?.n ?? 0;
+  const id = newId();
+  await insertStmt(db, 'people', {
+    id,
+    name: input.name,
+    relationship: input.relationship ?? null,
+    aliases_json: JSON.stringify(input.aliases ?? []),
+    color: PERSON_COLORS[count % PERSON_COLORS.length],
+    sort_order: count,
+    created_at: now,
+    updated_at: now,
+  }).run();
+  let resolved = await assignPersonByName(db, id, input.name);
+  for (const a of input.aliases ?? []) resolved += await assignPersonByName(db, id, a);
+  return c.json(
+    { person: toPerson((await first(db, 'SELECT * FROM people WHERE id = ?', id))!), resolved },
+    201,
+  );
+});
+
+admin.delete('/people/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM people WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+// ---------- providers ----------
+
+admin.post('/providers', async (c) => {
+  const input = await body(c, providerInput);
+  const now = nowIso();
+  const id = newId();
+  await insertStmt(c.env.DB, 'providers', {
+    id,
+    name: input.name,
+    aliases_json: JSON.stringify(input.aliases ?? []),
+    created_at: now,
+    updated_at: now,
+  }).run();
+  return c.json(
+    toProvider((await first(c.env.DB, 'SELECT * FROM providers WHERE id = ?', id))!),
+    201,
+  );
+});
+
+admin.patch('/providers/:id', async (c) => {
+  const input = await body(c, providerPatch);
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  if (!(await first(db, 'SELECT 1 FROM providers WHERE id = ?', id))) throw notFound('Provider');
+  const fields: Record<string, unknown> = {};
+  if (input.name !== undefined) fields.name = input.name;
+  if (input.aliases !== undefined) fields.aliases_json = JSON.stringify(input.aliases);
+  if (Object.keys(fields).length) await updateStmt(db, 'providers', id, fields).run();
+  return c.json(toProvider((await first(db, 'SELECT * FROM providers WHERE id = ?', id))!));
+});
+
+/**
+ * Merges a provider into another: its name becomes an alias of the target and its entries move.
+ * This is the explicit "same provider" decision the app never makes on its own.
+ */
+admin.post('/providers/:id/merge', async (c) => {
+  const db = c.env.DB;
+  const { into } = await body(c, providerMerge);
+  const fromId = c.req.param('id');
+  if (fromId === into) throw new ApiError(400, 'invalid', 'Pick a different provider.');
+  const [from, to] = await Promise.all([
+    first(db, 'SELECT * FROM providers WHERE id = ?', fromId),
+    first(db, 'SELECT * FROM providers WHERE id = ?', into),
+  ]);
+  if (!from || !to) throw notFound('Provider');
+  const f = toProvider(from);
+  const t = toProvider(to);
+  let aliases = withAlias(t.name, t.aliases, f.name);
+  for (const a of f.aliases) aliases = withAlias(t.name, aliases, a);
+  await db.batch([
+    updateStmt(db, 'providers', t.id, { aliases_json: JSON.stringify(aliases) }),
+    db
+      .prepare('UPDATE entries SET provider_id = ?, updated_at = ? WHERE provider_id = ?')
+      .bind(t.id, nowIso(), f.id),
+    db.prepare('DELETE FROM providers WHERE id = ?').bind(f.id),
+  ]);
+  return c.json(toProvider((await first(db, 'SELECT * FROM providers WHERE id = ?', t.id))!));
+});
+
+/** "Add provider alias" from Review: the printed name becomes an alias; matching entries resolve. */
+admin.post('/providers/:id/alias', async (c) => {
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const { alias } = (await c.req.json().catch(() => ({}))) as { alias?: string };
+  if (!alias?.trim()) throw new ApiError(400, 'invalid', 'alias: Required');
+  const row = await first(db, 'SELECT * FROM providers WHERE id = ?', id);
+  if (!row) throw notFound('Provider');
+  const p = toProvider(row);
+  await updateStmt(db, 'providers', id, {
+    aliases_json: JSON.stringify(withAlias(p.name, p.aliases, alias)),
+  }).run();
+  const rows = (
+    await all(
+      db,
+      'SELECT * FROM entries WHERE provider_id IS NULL AND lower(trim(provider_name_raw)) = lower(trim(?))',
+      alias,
+    )
+  ).map(toEntry);
+  if (rows.length) {
+    await db.batch(
+      rows.map((e) =>
+        updateStmt(db, 'entries', e.id, {
+          provider_id: id,
+          review_reasons_json: JSON.stringify(
+            e.review_reasons.filter((r) => r !== 'provider_suggestion' && r !== 'unknown_provider'),
+          ),
+        }),
+      ),
+    );
+    await refreshDocs(
+      db,
+      rows.map((e) => e.document_id),
+    );
+  }
+  return c.json({
+    provider: toProvider((await first(db, 'SELECT * FROM providers WHERE id = ?', id))!),
+    resolved: rows.length,
+  });
+});
+
+admin.delete('/providers/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM providers WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+// ---------- categories ----------
+
+admin.post('/categories', async (c) => {
+  const input = await body(c, categoryInput);
+  const db = c.env.DB;
+  if (await first(db, 'SELECT 1 FROM categories WHERE name = ? COLLATE NOCASE', input.name))
+    throw new ApiError(409, 'exists', 'That category already exists.');
+  const max =
+    (
+      await first<{ m: number }>(
+        db,
+        "SELECT MAX(sort_order) AS m FROM categories WHERE name != 'Other'",
+      )
+    )?.m ?? 0;
+  const id = newId();
+  await insertStmt(db, 'categories', {
+    id,
+    name: input.name,
+    sort_order: input.sort_order ?? max + 1,
+  }).run();
+  return c.json({ id, name: input.name, sort_order: input.sort_order ?? max + 1 }, 201);
+});
+
+admin.patch('/categories/:id', async (c) => {
+  const input = await body(c, categoryPatch);
+  const fields: Record<string, unknown> = {};
+  if (input.name !== undefined) fields.name = input.name;
+  if (input.sort_order !== undefined) fields.sort_order = input.sort_order;
+  if (Object.keys(fields).length)
+    await updateStmt(c.env.DB, 'categories', c.req.param('id'), fields, { touch: false }).run();
+  return c.json({ ok: true });
+});
+
+admin.delete('/categories/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+// ---------- backup ----------
+
+export async function exportAll(db: D1Database): Promise<HsaExport> {
+  const tables: HsaExport['tables'] = {};
+  for (const t of TABLE_ORDER) {
+    let rows = await all<ExportRow>(db, `SELECT * FROM ${t}`);
+    if (t === 'settings') rows = rows.filter((r) => !PRIVATE_SETTINGS.includes(String(r.key)));
+    tables[t] = rows;
+  }
+  const files = (tables.documents ?? []).flatMap((d) =>
+    [d.file_key, d.eml_key].filter((k): k is string => typeof k === 'string' && !!k),
+  );
+  return {
+    format: EXPORT_FORMAT,
+    version: EXPORT_VERSION,
+    exported_at: new Date().toISOString(),
+    tables,
+    files: [...new Set(files)],
+  };
+}
+
+/** Replaces all data with the export's rows in one atomic batch. */
+export async function importAll(
+  db: D1Database,
+  data: HsaExport,
+  { replace }: { replace: boolean },
+) {
+  const stmts: D1PreparedStatement[] = [db.prepare('PRAGMA defer_foreign_keys = ON')];
+  if (replace) {
+    for (const t of [...TABLE_ORDER].reverse()) {
+      stmts.push(
+        t === 'settings'
+          ? db
+              .prepare(
+                `DELETE FROM settings WHERE key NOT IN (${PRIVATE_SETTINGS.map(() => '?').join(',')})`,
+              )
+              .bind(...PRIVATE_SETTINGS)
+          : db.prepare(`DELETE FROM ${t}`),
+      );
+    }
+  }
+  for (const t of TABLE_ORDER) {
+    for (const row of data.tables[t] ?? []) {
+      if (t === 'settings' && PRIVATE_SETTINGS.includes(String(row.key))) continue;
+      const { cols, vals } = rowValues(t, row);
+      if (!cols.length) continue;
+      stmts.push(
+        db
+          .prepare(
+            `INSERT INTO ${t} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+          )
+          .bind(...vals),
+      );
+    }
+  }
+  await db.batch(stmts);
+}
+
+admin.get('/export', async (c) => {
+  const data = await exportAll(c.env.DB);
+  const stamp = data.exported_at.slice(0, 10);
+  return c.json(data, 200, {
+    'Content-Disposition': `attachment; filename="hsa-locker-backup-${stamp}.json"`,
+    'Cache-Control': 'no-store',
+  });
+});
+
+admin.post('/import', async (c) => {
+  const raw = await c.req.json().catch(() => null);
+  if (!isHsaExport(raw))
+    throw new ApiError(400, 'invalid', 'That file is not an HSA Locker backup.');
+  if (raw.version > EXPORT_VERSION)
+    throw new ApiError(
+      400,
+      'invalid',
+      'That backup is from a newer version of HSA Locker. Update this instance first.',
+    );
+  try {
+    await importAll(c.env.DB, raw, { replace: true });
+  } catch (e) {
+    throw new ApiError(400, 'invalid', `Could not restore that backup: ${(e as Error).message}`);
+  }
+  // Which documents' files are missing here (restore them with the documents export).
+  const keys = (raw.tables.documents ?? [])
+    .filter((d) => d.status !== 'discarded')
+    .map((d) => String(d.file_key));
+  let missing = 0;
+  for (const k of keys.slice(0, 1000)) if (!(await c.env.FILES.head(k))) missing++;
+  return c.json({ ok: true, documents: keys.length, missing_files: missing });
+});
+
+/**
+ * Puts one document's original file back from the documents export (the app reads the ZIP and
+ * sends each file with its document id). Only fills in a missing file; never overwrites.
+ */
+admin.post('/restore-file/:id', async (c) => {
+  const row = await first<{ file_key: string; mime: string; sha256: string }>(
+    c.env.DB,
+    'SELECT file_key, mime, sha256 FROM documents WHERE id = ?',
+    c.req.param('id'),
+  );
+  if (!row) throw notFound('Document');
+  if (await c.env.FILES.head(row.file_key)) return c.json({ ok: true, skipped: true });
+  const bytes = new Uint8Array(await c.req.arrayBuffer());
+  const { sha256Hex } = await import('../store');
+  if ((await sha256Hex(bytes)) !== row.sha256)
+    throw new ApiError(400, 'invalid', 'That file doesn’t match the document it’s for.');
+  await c.env.FILES.put(row.file_key, bytes, { httpMetadata: { contentType: row.mime } });
+  return c.json({ ok: true });
+});
+
+// ---------- sample data ----------
+
+async function isEmpty(db: D1Database): Promise<boolean> {
+  const r = await first<{ n: number }>(
+    db,
+    'SELECT (SELECT COUNT(*) FROM people) + (SELECT COUNT(*) FROM documents) AS n',
+  );
+  return (r?.n ?? 0) === 0;
+}
+
+admin.post('/sample-data', async (c) => {
+  if (!(await isEmpty(c.env.DB)))
+    throw new ApiError(
+      409,
+      'not_empty',
+      'Sample data can only be loaded into an empty HSA Locker.',
+    );
+  const data = sample as unknown as HsaExport;
+  await importAll(c.env.DB, data, { replace: false });
+  // Each sample document gets a short placeholder file so previews work.
+  for (const d of data.tables.documents ?? [])
+    await c.env.FILES.put(
+      String(d.file_key),
+      `SAMPLE DOCUMENT (synthetic, not a real receipt)\n${d.filename}\n`,
+      { httpMetadata: { contentType: 'text/plain' } },
+    );
+  return c.json({ ok: true }, 201);
+});
+
+// ---------- danger zone ----------
+
+admin.post('/delete-everything', async (c) => {
+  await body(c, deleteAllInput);
+  const db = c.env.DB;
+  // Files first, so nothing is left orphaned if this is interrupted.
+  let cursor: string | undefined;
+  do {
+    const page = await c.env.FILES.list({ cursor, limit: 1000 });
+    if (page.objects.length) await c.env.FILES.delete(page.objects.map((o) => o.key));
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  await db.batch([
+    db.prepare('DELETE FROM entries'),
+    db.prepare('DELETE FROM reimbursements'),
+    db.prepare('DELETE FROM documents'),
+    db.prepare('DELETE FROM inbox_verifications'),
+    db.prepare('DELETE FROM inbox_log'),
+    db.prepare('DELETE FROM providers'),
+    db.prepare('DELETE FROM people'),
+    db.prepare("DELETE FROM settings WHERE key NOT IN ('session_salt', 'inbox_token')"),
+  ]);
+  return c.json({ ok: true });
+});

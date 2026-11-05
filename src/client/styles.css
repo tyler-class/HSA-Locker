@@ -1,0 +1,189 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+
+/* HSA Locker palette: the family's paper beige and warm greys (after MemryNote's "Warm Utility"), with a calm blue accent. */
+:root {
+  --bg: #f6f5f0;
+  --surface: #ffffff;
+  --ink: #1a1a1a;
+  --soft: #4a4a4a;
+  --faint: #8c8c8c;
+  --line: #e4e4de;
+  --accent: #2f5fd0;
+  --accent-ink: #ffffff;
+  --accent-tint: color-mix(in srgb, #2f5fd0 11%, #f6f5f0);
+  --track: #e4e4de;
+  /* Needs review: amber, the one other color with meaning. */
+  --warn: #b45309;
+  --warn-tint: color-mix(in srgb, #d97706 13%, #f6f5f0);
+  --ok: #15803d;
+  --chip: #efefe9;
+  --seg: #ffffff;
+  --danger: #dc2626;
+  --scrim: rgb(26 26 26 / 0.32);
+
+  --person-blue: #3b82f6;
+  --person-violet: #8b5cf6;
+  --person-coral: #ef4444;
+  --person-amber: #d97706;
+  --person-green: #22a05a;
+  --person-rose: #e0457b;
+  --person-teal: #0891b2;
+  --person-slate: #64748b;
+  --person-mist: #8c8c8c;
+  color-scheme: light;
+}
+
+/* Dark: follows the device unless Settings → Appearance picks one (data-theme on <html>). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #181818;
+    --surface: #212121;
+    --ink: #dedede;
+    --soft: #cdcdcd;
+    --faint: #9a9a9a;
+    --line: #2e2e2e;
+    --accent: #7d9cf0;
+    --accent-ink: #181818;
+    --accent-tint: color-mix(in srgb, #7d9cf0 14%, #181818);
+    --track: #313131;
+    --warn: #fbbf24;
+    --warn-tint: color-mix(in srgb, #fbbf24 14%, #181818);
+    --ok: #4ade80;
+    --chip: #212121;
+    --seg: #313131;
+    --danger: #ef4444;
+    --scrim: rgb(0 0 0 / 0.55);
+
+    --person-blue: #60a5fa;
+    --person-violet: #a78bfa;
+    --person-coral: #f87171;
+    --person-amber: #fbbf24;
+    --person-green: #4ade80;
+    --person-rose: #f472b6;
+    --person-teal: #22d3ee;
+    --person-slate: #94a3b8;
+    --person-mist: #9a9a9a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #181818;
+  --surface: #212121;
+  --ink: #dedede;
+  --soft: #cdcdcd;
+  --faint: #9a9a9a;
+  --line: #2e2e2e;
+  --accent: #7d9cf0;
+  --accent-ink: #181818;
+  --accent-tint: color-mix(in srgb, #7d9cf0 14%, #181818);
+  --track: #313131;
+  --warn: #fbbf24;
+  --warn-tint: color-mix(in srgb, #fbbf24 14%, #181818);
+  --ok: #4ade80;
+  --chip: #212121;
+  --seg: #313131;
+  --danger: #ef4444;
+  --scrim: rgb(0 0 0 / 0.55);
+
+  --person-blue: #60a5fa;
+  --person-violet: #a78bfa;
+  --person-coral: #f87171;
+  --person-amber: #fbbf24;
+  --person-green: #4ade80;
+  --person-rose: #f472b6;
+  --person-teal: #22d3ee;
+  --person-slate: #94a3b8;
+  --person-mist: #9a9a9a;
+  color-scheme: dark;
+}
+
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-soft: var(--soft);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-tint: var(--accent-tint);
+  --color-track: var(--track);
+  --color-warn: var(--warn);
+  --color-warn-tint: var(--warn-tint);
+  --color-ok: var(--ok);
+  --color-chip: var(--chip);
+  --color-seg: var(--seg);
+  --color-danger: var(--danger);
+  --font-sans: 'Geist Variable', ui-sans-serif, -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  button {
+    cursor: pointer;
+  }
+  /* 16px keeps iOS Safari from zooming into fields. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  :focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@media (max-width: 639px) {
+  .sheet-in {
+    animation: sheet-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
