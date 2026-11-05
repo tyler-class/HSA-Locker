@@ -13,6 +13,7 @@ import {
 } from '../components/ui';
 import { api } from '../lib/api';
 import { useSave } from '../lib/useSave';
+import { Select } from '../components/Select';
 
 function Aliases({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const [draft, setDraft] = useState('');
@@ -169,15 +170,12 @@ function PersonSheet({ person, onClose }: { person: Person | null; onClose: () =
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs text-soft">Relationship</span>
-          <select
-            className="rounded-xl border border-line bg-surface px-3 py-2"
+          <Select
+            label="Relationship"
             value={rel}
-            onChange={(e) => setRel(e.target.value)}
-          >
-            {RELATIONSHIPS.map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
+            onChange={(v) => setRel(v)}
+            options={[...RELATIONSHIPS.map((r) => [r, r] as [string, string])]}
+          />
         </label>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Color">
           {PERSON_COLORS.map((c) => (
@@ -294,20 +292,18 @@ function ProviderSheet({
               spelling.
             </span>
             <div className="flex gap-2">
-              <select
-                className="min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 py-2"
+              <Select
+                label="Merge into"
                 value={mergeInto}
-                onChange={(e) => setMergeInto(e.target.value)}
-              >
-                <option value="">Choose…</option>
-                {state.providers
-                  .filter((p) => p.id !== provider.id)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-              </select>
+                onChange={(v) => setMergeInto(v)}
+                options={[
+                  ['', 'Choose…'],
+                  ...state.providers
+                    .filter((p) => p.id !== provider.id)
+                    .map((p) => [p.id, p.name] as [string, string]),
+                ]}
+                className="min-w-0 flex-1"
+              />
               <PrimaryButton
                 tone="secondary"
                 disabled={!mergeInto || busy}

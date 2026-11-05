@@ -19,6 +19,7 @@ import { api } from '../lib/api';
 import { formatDate, money, plural } from '../lib/format';
 import { useAppState, useDocument, useReview } from '../lib/queries';
 import { useSave } from '../lib/useSave';
+import { Select } from '../components/Select';
 
 export function Review() {
   const { id } = useParams();
@@ -293,19 +294,17 @@ function PersonFix({ raw, state }: { raw: string; state: AppState }) {
       </div>
       {state.people.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            aria-label="Existing person"
-            className="rounded-xl border border-line bg-surface px-3 py-1.5 text-sm"
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-          >
-            <option value="">Choose a person…</option>
-            {state.people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <div className="w-full sm:w-64">
+            <Select
+              label="Existing person"
+              value={target}
+              onChange={(v) => setTarget(v)}
+              options={[
+                ['', 'Choose a person…'],
+                ...state.people.map((p) => [p.id, p.name] as [string, string]),
+              ]}
+            />
+          </div>
           <PrimaryButton
             tone="secondary"
             className="py-1.5"
@@ -328,19 +327,17 @@ function ProviderFix({ raw, state }: { raw: string; state: AppState }) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl bg-chip px-3 py-2.5 text-sm">
       <span className="w-full">“{raw}” may be one of your providers.</span>
-      <select
-        aria-label="Provider"
-        className="rounded-xl border border-line bg-surface px-3 py-1.5 text-sm"
-        value={target}
-        onChange={(e) => setTarget(e.target.value)}
-      >
-        <option value="">Choose a provider…</option>
-        {state.providers.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+      <div className="w-full sm:w-64">
+        <Select
+          label="Provider"
+          value={target}
+          onChange={(v) => setTarget(v)}
+          options={[
+            ['', 'Choose a provider…'],
+            ...state.providers.map((p) => [p.id, p.name] as [string, string]),
+          ]}
+        />
+      </div>
       <PrimaryButton
         tone="secondary"
         className="py-1.5"

@@ -11,26 +11,16 @@ import { EXCLUDED_REASONS } from '@shared/lookups';
 import type { LedgerEntry } from '@shared/types';
 import { excludedText, namesFor, ReasonChips, StatusChip } from '../components/bits';
 import { EntrySheet } from '../components/EntrySheet';
+import { LedgerFilters } from '../components/LedgerFilters';
 import { Icon } from '../components/Icon';
 import { ReimburseSheet } from '../components/ReimburseSheet';
 import { useToast } from '../components/Toast';
 import { UploadSheet } from '../components/UploadSheet';
-import {
-  ActionList,
-  cx,
-  Empty,
-  PageHeader,
-  PrimaryButton,
-  Sheet,
-  TextInput,
-} from '../components/ui';
+import { ActionList, cx, Empty, PageHeader, PrimaryButton, Sheet } from '../components/ui';
 import { api } from '../lib/api';
 import { money, plural, shortDate } from '../lib/format';
 import { useAppState, useLedger, useReimbursements } from '../lib/queries';
 import { useSave } from '../lib/useSave';
-
-const selectCls =
-  'rounded-full border border-line bg-surface px-3 py-1.5 text-sm text-ink focus:border-accent focus:outline-none';
 
 export function Ledger() {
   const [params, setParams] = useSearchParams();
@@ -98,111 +88,7 @@ export function Ledger() {
         sub={`${plural(rows.length, 'entry', 'entries')} · receipts ${money(receiptsTotal)}`}
       />
 
-      <div className="flex flex-col gap-2 px-5 pt-2">
-        <TextInput
-          type="search"
-          placeholder="Search provider, patient, description, amount"
-          value={filter.q ?? ''}
-          onChange={(e) => setFilter({ q: e.target.value })}
-        />
-        <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-1">
-          <select
-            aria-label="Status"
-            className={selectCls}
-            value={filter.status}
-            onChange={(e) => setFilter({ status: e.target.value as LedgerFilter['status'] })}
-          >
-            <option value="all">Any status</option>
-            <option value="outstanding">Outstanding</option>
-            <option value="reimbursed">Reimbursed</option>
-            <option value="excluded">Excluded</option>
-            <option value="needs_review">Needs review</option>
-          </select>
-          <select
-            aria-label="Year"
-            className={selectCls}
-            value={filter.year ?? ''}
-            onChange={(e) =>
-              setFilter({
-                year:
-                  e.target.value === ''
-                    ? null
-                    : e.target.value === 'undated'
-                      ? 'undated'
-                      : Number(e.target.value),
-              })
-            }
-          >
-            <option value="">All years</option>
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y === 'undated' ? 'No date' : y}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Type"
-            className={selectCls}
-            value={filter.type}
-            onChange={(e) => setFilter({ type: e.target.value as LedgerFilter['type'] })}
-          >
-            <option value="all">Receipts &amp; EOBs</option>
-            <option value="receipt">Receipts</option>
-            <option value="eob">EOB lines</option>
-          </select>
-          <select
-            aria-label="Person"
-            className={selectCls}
-            value={filter.person ?? ''}
-            onChange={(e) => setFilter({ person: e.target.value || null })}
-          >
-            <option value="">Everyone</option>
-            {state.people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Category"
-            className={selectCls}
-            value={filter.category ?? ''}
-            onChange={(e) => setFilter({ category: e.target.value || null })}
-          >
-            <option value="">Any category</option>
-            {state.categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Provider"
-            className={selectCls}
-            value={filter.provider ?? ''}
-            onChange={(e) => setFilter({ provider: e.target.value || null })}
-          >
-            <option value="">Any provider</option>
-            {state.providers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Sort"
-            className={selectCls}
-            value={filter.sort}
-            onChange={(e) => setFilter({ sort: e.target.value as LedgerFilter['sort'] })}
-          >
-            <option value="date_desc">Newest first</option>
-            <option value="date_asc">Oldest first</option>
-            <option value="amount_desc">Largest first</option>
-            <option value="amount_asc">Smallest first</option>
-            <option value="added_desc">Recently added</option>
-          </select>
-        </div>
-      </div>
+      <LedgerFilters filter={filter} setFilter={setFilter} state={state} years={years} />
 
       {ledger.isPending ? null : rows.length === 0 ? (
         <Empty title="Nothing matches">Try fewer filters, or upload a receipt.</Empty>

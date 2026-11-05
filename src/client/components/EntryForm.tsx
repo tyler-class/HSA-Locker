@@ -4,6 +4,7 @@ import { matchProvider } from '@shared/logic';
 import type { AppState, Entry, ExcludedReason } from '@shared/types';
 import { centsInput, parseTypedMoney } from '../lib/format';
 import { ErrorText, Segmented, TextInput } from './ui';
+import { Select } from './Select';
 
 export type EntryDraftForm = {
   type: 'receipt' | 'eob';
@@ -102,9 +103,6 @@ function Field({
   );
 }
 
-const selectCls =
-  'w-full rounded-xl border border-line bg-surface px-3 py-2 text-base text-ink focus:border-accent focus:outline-none';
-
 export function EntryForm({
   value,
   onChange,
@@ -162,35 +160,29 @@ export function EntryForm({
         <div />
       )}
       <Field label={printed?.patient ? `Patient (printed “${printed.patient}”)` : 'Patient'} wide>
-        <select
-          className={selectCls}
+        <Select
+          label="Patient"
           value={value.person_id}
-          onChange={(e) => set('person_id', e.target.value)}
-        >
-          <option value="">Not set</option>
-          {state.people.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => set('person_id', v)}
+          options={[
+            ['', 'Not set'],
+            ...state.people.map((p) => [p.id, p.name] as [string, string]),
+          ]}
+        />
       </Field>
       <Field
         label={printed?.provider ? `Provider (printed “${printed.provider}”)` : 'Provider'}
         wide
       >
-        <select
-          className={selectCls}
+        <Select
+          label="Provider"
           value={value.provider_id}
-          onChange={(e) => set('provider_id', e.target.value)}
-        >
-          <option value="">Not set</option>
-          {state.providers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => set('provider_id', v)}
+          options={[
+            ['', 'Not set'],
+            ...state.providers.map((p) => [p.id, p.name] as [string, string]),
+          ]}
+        />
         {suggested && (
           <button
             type="button"
@@ -269,33 +261,24 @@ export function EntryForm({
         </>
       )}
       <Field label="Category">
-        <select
-          className={selectCls}
+        <Select
+          label="Category"
           value={value.category_id}
-          onChange={(e) => set('category_id', e.target.value)}
-        >
-          <option value="">None</option>
-          {state.categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => set('category_id', v)}
+          options={[
+            ['', 'None'],
+            ...state.categories.map((p) => [p.id, p.name] as [string, string]),
+          ]}
+        />
       </Field>
       {value.type === 'receipt' ? (
         <Field label="Exclude from reimbursable">
-          <select
-            className={selectCls}
+          <Select
+            label="Exclude from reimbursable"
             value={value.excluded_reason}
-            onChange={(e) => set('excluded_reason', e.target.value)}
-          >
-            <option value="">No</option>
-            {EXCLUDED_REASONS.map(([k, label]) => (
-              <option key={k} value={k}>
-                {label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set('excluded_reason', v)}
+            options={[['', 'No'], ...EXCLUDED_REASONS]}
+          />
         </Field>
       ) : (
         <div />

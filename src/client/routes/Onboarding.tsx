@@ -8,6 +8,7 @@ import { ErrorText, GhostButton, PrimaryButton, TextInput } from '../components/
 import { api } from '../lib/api';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
+import { Select } from '../components/Select';
 
 /** First run: people → HSA cards (optional) → inbox (skippable) → first upload. */
 export function Onboarding() {
@@ -75,16 +76,14 @@ export function Onboarding() {
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
-            <select
-              aria-label="Relationship"
-              className="rounded-xl border border-line bg-surface px-3 py-2"
-              value={rel}
-              onChange={(e) => setRel(e.target.value)}
-            >
-              {RELATIONSHIPS.map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
+            <div className="w-36 flex-none">
+              <Select
+                label="Relationship"
+                value={rel}
+                onChange={(v) => setRel(v)}
+                options={[...RELATIONSHIPS.map((r) => [r, r] as [string, string])]}
+              />
+            </div>
             <GhostButton type="submit" icon="plus" disabled={!name.trim() || busy}>
               Add
             </GhostButton>
