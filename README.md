@@ -110,6 +110,8 @@ The update replaces the app’s code, so changes you made to your copy’s code 
 
 If you deployed by hand, `git pull` and `npm run deploy`.
 
+How the button, Workers Builds and the update workflow fit together: [docs/deploy-and-updates.md](docs/deploy-and-updates.md).
+
 ## Local development
 
 ```sh
