@@ -77,6 +77,15 @@ Upload has a **Take photo** button for paper receipts.
 
 HSA Locker includes an [MCP](https://modelcontextprotocol.io) server at `https://<your-hsa-locker>/mcp`. Open **Settings → Connect an AI assistant** to copy your URL and see steps for Claude, ChatGPT, Claude Code and others. When an assistant connects, HSA Locker shows a sign-in page; enter your household password to approve it. Assistants can read your ledger and totals and record reimbursements; they can’t open the documents.
 
+Not sure what to ask? Ask the assistant “what can you do with HSA Locker?”: it calls `get_started`, which returns your current totals and open items with example requests that fit. Some to try:
+
+- “How much can I reimburse myself from my HSA right now, and which receipts make that up?”
+- “I withdrew \<amount> from my HSA on \<date>. Find outstanding receipts that add up to it and record the reimbursement once I confirm.”
+- “Go through my review queue: tell me what’s wrong with each item and what you’d fix.”
+- “What did we spend on \<person>’s care in \<year>, by category and provider?”
+
+Settings → Connect an AI assistant lists more under **Try asking** (tap one to copy it). The server also offers ready-made prompts, which Claude shows in its **+** menu: **Record a reimbursement**, **Work through Review**, **Year in review** and **Check HSA card receipts**. Each one shows you the list and the total and asks before changing anything. The examples live in `src/shared/examples.ts`; the server instructions, `get_started` and the Settings list all read from it.
+
 ## Change the password
 
 Set a new `APP_PASSWORD` in the Cloudflare dashboard under **Workers & Pages → hsa-locker → Settings → Variables and Secrets**, or with `npx wrangler secret put APP_PASSWORD`. Everyone is signed out. Connected AI assistants keep working until you disconnect them.

@@ -3,6 +3,35 @@ import { useState } from 'react';
 import { api, errorMessage } from '../lib/api';
 import { Icon } from '../components/Icon';
 import { ErrorText, GhostButton, SectionLabel, SubHeading } from '../components/ui';
+import { useToast } from '../components/Toast';
+import { EXAMPLE_PROMPTS } from '@shared/examples';
+
+/** Example requests (the same list the MCP server offers), tap to copy. */
+function TryAsking() {
+  const toast = useToast();
+  return (
+    <div className="flex flex-col px-6">
+      {EXAMPLE_PROMPTS.slice(0, 6).map((e) => (
+        <button
+          key={e.prompt}
+          type="button"
+          title="Copy"
+          onClick={() =>
+            void navigator.clipboard
+              ?.writeText(e.prompt)
+              .then(() => toast({ text: 'Copied.' }))
+              .catch(() => {})
+          }
+          className="flex items-start gap-3 border-b border-line py-3 text-left text-sm text-ink"
+        >
+          <span className="flex-1">“{e.prompt}”</span>
+          <Icon name="copy" size={15} className="mt-0.5 flex-none text-faint" />
+        </button>
+      ))}
+      <p className="pt-2 text-xs text-faint">Claude also lists ready-made prompts in its + menu.</p>
+    </div>
+  );
+}
 
 function Copy({ text, label = 'Copy' }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -94,6 +123,9 @@ export function ConnectAISection() {
         Cursor, VS Code and other MCP apps: add a remote (HTTP) MCP server with the URL above. They
         open the HSA Locker sign-in page the first time.
       </p>
+
+      <SubHeading>Try asking</SubHeading>
+      <TryAsking />
 
       <SubHeading>Connected</SubHeading>
       <Connections />
