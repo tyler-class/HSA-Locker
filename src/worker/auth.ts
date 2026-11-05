@@ -172,7 +172,9 @@ export const guard: MiddlewareHandler<Env> = async (c, next) => {
     // on cross-site POSTs, so a missing Origin here means a non-browser client with the cookie).
     const upload =
       c.req.method === 'POST' &&
-      (path === '/api/documents' || path.startsWith('/api/restore-file/'));
+      (path === '/api/documents' ||
+        path === '/api/legacy-import/document' ||
+        path.startsWith('/api/restore-file/'));
     if (upload) {
       if (!origin) return c.json({ error: 'forbidden', message: 'Missing Origin.' }, 403);
     } else if (!ct.startsWith('application/json')) {

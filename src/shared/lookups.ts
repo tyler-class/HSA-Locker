@@ -33,6 +33,7 @@ export const REVIEW_REASON_LABEL: Record<string, string> = {
   extraction_failed: 'Couldn’t read this document',
   legacy_flagged: 'Flagged in HSA Wizard',
   model_flagged: 'Flagged while reading',
+  legacy_file_missing: 'File not found during import',
   body_only_email: 'Email without an attachment',
 };
 
