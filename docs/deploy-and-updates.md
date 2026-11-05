@@ -122,3 +122,123 @@ Some of this can only be confirmed end to end. With a second GitHub account and 
 2. Push a small release to the source repo.
 3. In the copy, run **Actions → Update <App> → Run workflow**. Check that it commits, that Workers Builds deploys, and that the keep-alive step succeeds.
 4. Check the app shows the new version (Settings → About).
+
+## Appendix: files to copy
+
+Both files are the same in every project except for the placeholders in the workflow.
+
+### scripts/release.ts
+
+Copy as is.
+
+```ts
+// Migrates the remote database, then deploys the Worker, so new code never runs against
+// missing columns. On a first install the database doesn't exist until `wrangler deploy`
+// provisions it, so migrations run once more after the deploy.
+// Usage: npm run release (after npm run build). Workers Builds runs it as the deploy command.
+import { spawn } from 'node:child_process';
+
+/** Runs wrangler, streaming its output while keeping a copy to inspect. */
+function wrangler(args: string[]): Promise<{ ok: boolean; output: string }> {
+  return new Promise((resolve) => {
+    let output = '';
+    const p = spawn('npx', ['wrangler', ...args], { stdio: ['inherit', 'pipe', 'pipe'] });
+    p.stdout.on('data', (d: Buffer) => ((output += d), process.stdout.write(d)));
+    p.stderr.on('data', (d: Buffer) => ((output += d), process.stderr.write(d)));
+    p.on('close', (code) => resolve({ ok: code === 0, output }));
+  });
+}
+
+const migrate = ['d1', 'migrations', 'apply', 'DB', '--remote'];
+
+const before = await wrangler(migrate);
+const firstInstall =
+  !before.ok && /couldn'?t find|not found|no database|database_id/i.test(before.output);
+if (!before.ok && !firstInstall) process.exit(1);
+if (firstInstall) console.log('No database yet: deploying first, then migrating.');
+
+if (!(await wrangler(['deploy'])).ok) process.exit(1);
+
+if (firstInstall && !(await wrangler(migrate)).ok) process.exit(1);
+```
+
+### .github/workflows/update.yml
+
+Replace **every** placeholder before committing:
+
+- `<REPO>`: the GitHub repo name exactly as GitHub spells it (`HSA-Locker`, `Duffel`, `ratio`, `Nitrogen`). It appears three times: the source repo check, the fetch URL and the notice.
+- `<App name>`: the app's display name (`HSA Locker`, `Duffel`, `Ratio`, `Nitrogen`).
+
+```yaml
+# Keeps a copy made with the Deploy to Cloudflare button up to date with tyler-class/<REPO>.
+# The button makes a plain copy, not a fork, so GitHub's "Sync fork" isn't available.
+# Each run replaces the app with the latest <App name> and pushes; Cloudflare then migrates and
+# redeploys. Your data lives in the database and file storage, not here, so it isn't touched.
+name: Update <App name>
+
+on:
+  schedule:
+    - cron: '23 9 * * 1' # Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  # For the keep-alive step below.
+  actions: write
+
+jobs:
+  update:
+    # Only in copies, never in <App name> itself.
+    if: github.repository != 'tyler-class/<REPO>'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Take the latest <App name>
+        run: |
+          git fetch --depth=1 https://github.com/tyler-class/<REPO>.git main
+          upstream=$(git rev-parse FETCH_HEAD)
+
+          # Kept from this copy: its workflows (GitHub doesn't let this job change them) and a
+          # wrangler.jsonc that has its own database id written in.
+          keep=$(mktemp -d)
+          cp -r .github/workflows "$keep/workflows"
+          if grep -q '"database_id"' wrangler.jsonc; then cp wrangler.jsonc "$keep/"; fi
+
+          git rm -rq .
+          git checkout "$upstream" -- .
+          rm -rf .github/workflows && cp -r "$keep/workflows" .github/workflows
+          if [ -f "$keep/wrangler.jsonc" ]; then cp "$keep/wrangler.jsonc" .; fi
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Already up to date."
+            exit 0
+          fi
+          if ! git diff --quiet "$upstream" HEAD -- .github/workflows 2>/dev/null; then
+            echo "::notice::Your .github/workflows differ from <App name>'s and were left as they are. Copy any you want from tyler-class/<REPO> by hand."
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -qm "Update <App name> to ${upstream:0:7}"
+          git push
+
+      # GitHub turns off scheduled workflows in a repo with no activity for 60 days, and this one
+      # only commits when there's a new version. Re-enabling it on every run resets that timer,
+      # so the weekly check never switches itself off.
+      - name: Keep this workflow enabled
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/update.yml/enable"
+```
+
+## Prompt for another project's agent
+
+Paste this doc, then this prompt, filling in the first line:
+
+> This repo is **<App name>** (`tyler-class/<REPO>`). Bring it in line with the doc above:
+>
+> 1. If `package.json`'s `deploy` script runs `wrangler deploy` before migrating, switch to database-first: add `scripts/release.ts` from the appendix and set the `deploy` and `release` scripts as described. Check `tsx` is a dev dependency and `scripts` is in `tsconfig.node.json`.
+> 2. Add or update `.github/workflows/update.yml` from the appendix with every placeholder replaced. If the repo already has one, keep anything project-specific and add the keep-alive step and `actions: write`.
+> 3. Check `wrangler.jsonc` has no resource ids (`database_id`, KV `id`, `bucket_name`) and that the README's Deploy button and “Update your copy” section match.
+> 4. Bump the version per this repo's convention, run typecheck, lint and tests, and commit. Don't push: pushing to main may deploy. Tell me what you changed and anything that didn't fit.
