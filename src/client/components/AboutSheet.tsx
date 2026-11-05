@@ -3,7 +3,7 @@ import { Icon, type IconName } from './Icon';
 import { cx, Sheet } from './ui';
 
 const LINKS: [string, string, IconName][] = [
-  ['https://github.com/tyler-class/hsa-locker', 'HSA Locker on GitHub', 'github'],
+  ['https://github.com/tyler-class/HSA-Locker', 'HSA Locker on GitHub', 'github'],
   ['https://ko-fi.com/tylerclass', 'HSA Locker is free. Coffee is my love language ☕', 'coffee'],
   ['https://tylerclass.net', 'tylerclass.net', 'link'],
 ];

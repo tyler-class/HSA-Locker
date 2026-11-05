@@ -1,4 +1,4 @@
-# Keeps a copy made with the Deploy to Cloudflare button up to date with tyler-class/hsa-locker.
+# Keeps a copy made with the Deploy to Cloudflare button up to date with tyler-class/HSA-Locker.
 # The button makes a plain copy, not a fork, so GitHub's "Sync fork" isn't available.
 # Each run replaces the app with the latest HSA Locker and pushes; Cloudflare then migrates and
 # redeploys. Your data lives in the database and file storage, not here, so it isn't touched.
@@ -15,13 +15,13 @@ permissions:
 jobs:
   update:
     # Only in copies, never in HSA Locker itself.
-    if: github.repository != 'tyler-class/hsa-locker'
+    if: github.repository != 'tyler-class/HSA-Locker'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - name: Take the latest HSA Locker
         run: |
-          git fetch --depth=1 https://github.com/tyler-class/hsa-locker.git main
+          git fetch --depth=1 https://github.com/tyler-class/HSA-Locker.git main
           upstream=$(git rev-parse FETCH_HEAD)
 
           # Kept from this copy: its workflows (GitHub doesn't let this job change them) and a
@@ -41,7 +41,7 @@ jobs:
             exit 0
           fi
           if ! git diff --quiet "$upstream" HEAD -- .github/workflows 2>/dev/null; then
-            echo "::notice::Your .github/workflows differ from HSA Locker's and were left as they are. Copy any you want from tyler-class/hsa-locker by hand."
+            echo "::notice::Your .github/workflows differ from HSA Locker's and were left as they are. Copy any you want from tyler-class/HSA-Locker by hand."
           fi
           git -c user.name='github-actions[bot]' \
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \

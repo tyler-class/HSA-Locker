@@ -2,7 +2,7 @@
 
 Keep every medical receipt and EOB for your HSA in one place, and always know how much you can still reimburse yourself. Forward a receipt by email or snap a photo; HSA Locker stores the original, reads it, and adds it to your ledger.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/hsa-locker)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/HSA-Locker)
 
 - **Every original, kept.** PDFs, photos and the emails they came in are stored privately in your own Cloudflare R2 bucket and open only through the app.
 - **Read for you.** Each document is read by an AI model (Workers AI by default, inside your Cloudflare account) into dates, patient, provider, amount and card. Receipts become one entry; EOBs become one line per service.
@@ -35,7 +35,7 @@ Cloudflare runs the database migrations on every deploy (`npm run deploy`), befo
 ### By hand
 
 ```sh
-git clone https://github.com/tyler-class/hsa-locker.git && cd hsa-locker
+git clone https://github.com/tyler-class/HSA-Locker.git && cd HSA-Locker
 npm install
 npx wrangler login
 npx wrangler secret put APP_PASSWORD

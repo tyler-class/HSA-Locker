@@ -79,7 +79,7 @@ export function Layout() {
         <div className="mt-auto flex flex-col gap-1">
           <AboutButton variant="nav" />
           <a
-            href="https://github.com/tyler-class/hsa-locker"
+            href="https://github.com/tyler-class/HSA-Locker"
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-3 rounded-full px-3.5 py-2 text-xs text-faint hover:bg-line/60"
