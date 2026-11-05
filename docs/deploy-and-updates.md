@@ -38,6 +38,32 @@ Workers Builds runs `npm run build`, then the deploy script. In HSA Locker and D
 
 Migration rule that follows from this: **migrations must be safe for the version that is still running.** The old code keeps serving for the seconds between migrating and deploying. Add tables and columns freely; don't drop or rename something the previous version reads. Do that in a later release instead.
 
+#### Why the database goes first
+
+An update changes two things: the **code** the Worker runs and the **database layout** (which tables and columns exist). A migration is the SQL file that changes the layout.
+
+- **Deploy first, then migrate:** the new code goes live and asks for a column that doesn't exist yet. For a few seconds people see errors. If the migration then fails, the new code stays live against the old database and the app stays broken.
+- **Migrate first, then deploy (what we do):** the database gains the new column while the old code is still running. The old code ignores what it doesn't know, so nothing breaks. Then the new code goes live and finds everything it needs. If the migration fails, the deploy never happens and the old version keeps working.
+
+This is the standard approach, often called **expand, then contract**:
+
+1. **Expand:** a release adds what the new code needs (tables, columns, indexes). Ship it with the code that uses them.
+2. **Contract:** removing or renaming something happens in a **later** release, once no running version uses it. To rename a column: add the new one and write to both, then switch reads, then drop the old one in a following release.
+
+New columns must work for rows that already exist: give them a default or allow NULL.
+
+#### Switching a project to database-first
+
+For a project whose `deploy` script is `wrangler deploy && wrangler d1 migrations apply DB --remote`:
+
+1. Copy `scripts/release.ts` from HSA Locker unchanged. It migrates, deploys, and handles the first install (where the database only exists after the first deploy).
+2. In `package.json` set:
+   - `"deploy": "npm run build && npm run release"`
+   - `"release": "tsx scripts/release.ts"`
+3. Make sure `tsx` is in `devDependencies` and `scripts` is in `tsconfig.node.json`'s `include`.
+4. If the Worker is connected to Workers Builds, change its **Deploy command** to `npm run release` (Settings → Builds).
+5. Ship it as a normal release. The next deploy migrates first.
+
 ### 3. The weekly update workflow
 
 `.github/workflows/update.yml` ships inside every copy. It:

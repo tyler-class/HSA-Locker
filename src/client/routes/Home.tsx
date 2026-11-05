@@ -116,29 +116,33 @@ export function Home() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-soft">
-                <th className="py-2 font-normal">Year</th>
-                <th className="py-2 text-right font-normal">Documented</th>
-                <th className="hidden py-2 text-right font-normal sm:table-cell">Reimbursed</th>
-                <th className="py-2 text-right font-normal">Outstanding</th>
-                <th className="hidden py-2 text-right font-normal md:table-cell">Receipts</th>
-                <th className="hidden py-2 text-right font-normal md:table-cell">EOBs</th>
+                <th className="px-3 py-2 font-normal">Year</th>
+                <th className="px-3 py-2 text-right font-normal">Documented</th>
+                <th className="px-3 hidden py-2 text-right font-normal sm:table-cell">
+                  Reimbursed
+                </th>
+                <th className="px-3 py-2 text-right font-normal">Outstanding</th>
+                <th className="px-3 hidden py-2 text-right font-normal md:table-cell">Receipts</th>
+                <th className="px-3 hidden py-2 text-right font-normal md:table-cell">EOBs</th>
               </tr>
             </thead>
             <tbody>
               {s.years.map((y) => (
                 <tr
                   key={y.year ?? 'undated'}
-                  className="cursor-pointer border-t border-line hover:bg-chip"
+                  className="group cursor-pointer border-t border-line"
                   onClick={() => nav(`/ledger?year=${y.year ?? 'undated'}`)}
                 >
-                  <td className="py-2.5 font-medium">
+                  <td className="px-3 transition-colors group-hover:bg-chip first:rounded-l-xl last:rounded-r-xl py-2.5 font-medium">
                     <Link to={`/ledger?year=${y.year ?? 'undated'}`}>{y.year ?? 'No date'}</Link>
                   </td>
-                  <td className="py-2.5 text-right tnum">{money(y.documented_cents)}</td>
-                  <td className="hidden py-2.5 text-right tnum sm:table-cell">
+                  <td className="px-3 transition-colors group-hover:bg-chip first:rounded-l-xl last:rounded-r-xl py-2.5 text-right tnum">
+                    {money(y.documented_cents)}
+                  </td>
+                  <td className="px-3 transition-colors group-hover:bg-chip first:rounded-l-xl last:rounded-r-xl hidden py-2.5 text-right tnum sm:table-cell">
                     {money(y.reimbursed_cents)}
                   </td>
-                  <td className="py-2.5 text-right tnum">
+                  <td className="px-3 transition-colors group-hover:bg-chip first:rounded-l-xl last:rounded-r-xl py-2.5 text-right tnum">
                     {money(y.outstanding_cents)}
                     {y.pending_review_cents > 0 && (
                       <span className="block text-[11px] text-warn">
@@ -146,8 +150,10 @@ export function Home() {
                       </span>
                     )}
                   </td>
-                  <td className="hidden py-2.5 text-right tnum md:table-cell">{y.receipt_count}</td>
-                  <td className="hidden py-2.5 text-right tnum md:table-cell">
+                  <td className="px-3 transition-colors group-hover:bg-chip first:rounded-l-xl last:rounded-r-xl hidden py-2.5 text-right tnum md:table-cell">
+                    {y.receipt_count}
+                  </td>
+                  <td className="px-3 transition-colors group-hover:bg-chip first:rounded-l-xl last:rounded-r-xl hidden py-2.5 text-right tnum md:table-cell">
                     {y.eob_document_count}
                   </td>
                 </tr>
@@ -173,10 +179,10 @@ export function Home() {
           <SectionLabel icon="clock">Recently logged</SectionLabel>
           <ul className="px-5 pt-1">
             {s.recent.map((e) => (
-              <li key={e.id}>
+              <li key={e.id} className="border-b border-line">
                 <button
                   onClick={() => setOpen(e)}
-                  className="flex w-full items-center gap-3 border-b border-line py-3 text-left"
+                  className="my-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-chip"
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-[15px]">{names.providerOf(e)}</span>

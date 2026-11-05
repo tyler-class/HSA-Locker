@@ -109,8 +109,8 @@ export function Ledger() {
             <li key={e.id} className="border-b border-line">
               <div
                 className={cx(
-                  'flex items-center px-3',
-                  selected.has(e.id) && 'my-1 rounded-xl bg-accent-tint',
+                  'flex items-center rounded-xl px-3 transition-colors',
+                  selected.has(e.id) ? 'my-1 bg-accent-tint' : 'hover:bg-chip',
                 )}
               >
                 <button
