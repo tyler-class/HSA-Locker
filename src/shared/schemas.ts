@@ -47,6 +47,16 @@ export const settingsPatch = z.object({
     )
     .nullable()
     .optional(),
+  /** The part before the @. Replaces the random name; Rotate goes back to a random one. */
+  inbox_local: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(
+      /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/,
+      'Use letters, numbers, dots, dashes or underscores.',
+    )
+    .optional(),
   inbox_paused: z.boolean().optional(),
   inbox_min_kb: z.number().int().min(0).max(5000).optional(),
   inbox_max_attachments: z.number().int().min(1).max(50).optional(),

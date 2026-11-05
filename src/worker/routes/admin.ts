@@ -99,6 +99,8 @@ admin.patch('/settings', async (c) => {
   if (input.hsa_cards) set('hsa_card_last4_json', JSON.stringify([...new Set(input.hsa_cards)]));
   if (input.family_names) set('family_names_json', JSON.stringify(input.family_names));
   if (input.inbox_domain !== undefined) set('inbox_domain', input.inbox_domain ?? '');
+  // The address's local part is the inbox token; a chosen one replaces the random one.
+  if (input.inbox_local !== undefined) set('inbox_token', input.inbox_local);
   if (input.inbox_paused !== undefined) set('inbox_paused', input.inbox_paused ? '1' : '0');
   if (input.inbox_min_kb !== undefined) set('inbox_min_kb', String(input.inbox_min_kb));
   if (input.inbox_max_attachments !== undefined)

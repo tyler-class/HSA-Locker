@@ -131,6 +131,9 @@ export function InboxSettings() {
 
       {s.inbox_address && (
         <>
+          <SectionLabel icon="mail">Address</SectionLabel>
+          <AddressName key={s.inbox_address} address={s.inbox_address} />
+
           <SectionLabel icon="settings">2. Point the address at HSA Locker</SectionLabel>
           <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
             <div className="flex items-center gap-1">
@@ -321,6 +324,48 @@ export function InboxSettings() {
           Back to Settings
         </GhostButton>
       </div>
+    </div>
+  );
+}
+
+const LOCAL_RE = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
+
+/** The part before the @: random by default, or a name the person picks. */
+function AddressName({ address }: { address: string }) {
+  const [local, domain] = address.split('@') as [string, string];
+  const [value, setValue] = useState(local);
+  const { run, busy, error } = useSave();
+  const valid = LOCAL_RE.test(value);
+  return (
+    <div className="flex flex-col gap-2 px-6 pt-4 text-sm">
+      <div className="flex items-center gap-2">
+        <TextInput
+          aria-label="Address name"
+          className="min-w-0 flex-1 font-mono"
+          value={value}
+          onChange={(e) => setValue(e.target.value.trim().toLowerCase())}
+        />
+        <span className="flex-none font-mono text-soft">@{domain}</span>
+        <PrimaryButton
+          disabled={busy || !valid || value === local}
+          onClick={async () => {
+            if (
+              confirm(
+                `Change the address to ${value}@${domain}? The current one stops working, so update the Cloudflare routing rule to match.`,
+              )
+            )
+              await run(() => api.patch('/settings', { inbox_local: value }), [['inbox']]);
+          }}
+        >
+          Save
+        </PrimaryButton>
+      </div>
+      <p className="text-xs text-faint">
+        {value && !valid
+          ? 'Use letters, numbers, dots, dashes or underscores.'
+          : 'A name that’s easy to guess lets anyone send you documents. Rotate makes a random one.'}
+      </p>
+      <ErrorText>{error}</ErrorText>
     </div>
   );
 }

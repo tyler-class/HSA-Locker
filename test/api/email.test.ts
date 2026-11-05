@@ -219,4 +219,16 @@ describe('email intake', () => {
     expect(address).toMatch(/^hsa-[a-z2-7]{10}@hsa-in\.example\.com$/);
     expect((await deliver(mime({ to: old }), old)).rejected).toBe('unknown recipient');
   });
+
+  it('accepts a chosen address name instead of the random one', async () => {
+    const random = address;
+    const s = await api.patch<{ inbox_address: string }>('/settings', { inbox_local: 'Receipts' });
+    expect(s.data.inbox_address).toBe('receipts@hsa-in.example.com');
+    expect(
+      (await deliver(mime({ to: s.data.inbox_address }), s.data.inbox_address)).rejected,
+    ).toBeNull();
+    expect((await deliver(mime({ to: random }), random)).rejected).toBe('unknown recipient');
+    expect((await api.patch('/settings', { inbox_local: 'no spaces' })).status).toBe(400);
+    expect((await api.patch('/settings', { inbox_local: 'a@b' })).status).toBe(400);
+  });
 });
