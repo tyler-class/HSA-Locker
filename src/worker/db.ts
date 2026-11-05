@@ -250,6 +250,7 @@ export async function loadSettings(db: D1Database): Promise<Settings> {
     hsa_cards: arr(m.get('hsa_card_last4_json')),
     family_names: arr(m.get('family_names_json')),
     inbox_domain: domain,
+    inbox_local: token,
     inbox_address: domain ? `${token}@${domain}` : null,
     inbox_paused: m.get('inbox_paused') === '1',
     inbox_min_kb: num(m.get('inbox_min_kb'), INBOX_DEFAULTS.min_kb),

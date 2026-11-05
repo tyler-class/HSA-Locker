@@ -1,5 +1,6 @@
 // Settings → Inbox: the address, its log, forwarding confirmations, rotate.
 import { Hono } from 'hono';
+import { mxStatus, routingStatus } from '@shared/logic';
 import type { InboxLogRow, InboxVerification } from '@shared/types';
 import { all, first, loadSettings, newInboxToken, nowIso, setSettingStmt } from '../db';
 import { notFound, type AppEnv } from './util';
@@ -46,6 +47,41 @@ inbox.get('/inbox', async (c) => {
     log,
     verifications,
   });
+});
+
+/**
+ * What the app can verify about the email setup: the subdomain's public MX records (Cloudflare
+ * Email Routing adds them when the subdomain is added) and, from the inbox log, whether mail sent
+ * to the address actually arrived. The routing rule itself isn't readable without an API token.
+ */
+inbox.get('/inbox/check', async (c) => {
+  const db = c.env.DB;
+  const settings = await loadSettings(db);
+  if (!settings.inbox_domain || !settings.inbox_address)
+    return c.json({ dns: 'unknown', mx: [], routing: 'waiting', other_address: null });
+  let dns: 'ok' | 'missing' | 'other' | 'unknown' = 'unknown';
+  let mx: string[] = [];
+  try {
+    const res = await fetch(
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(settings.inbox_domain)}&type=MX`,
+      { headers: { Accept: 'application/dns-json' } },
+    );
+    if (res.ok) {
+      const r = mxStatus(
+        ((await res.json()) as { Answer?: { type: number; data: string }[] }).Answer,
+      );
+      dns = r.status;
+      mx = r.hosts;
+    }
+  } catch {
+    /* DNS lookup unavailable: report unknown */
+  }
+  const log = await all<{ to_addr: string | null; outcome: string; reason: string | null }>(
+    db,
+    'SELECT to_addr, outcome, reason FROM inbox_log ORDER BY received_at DESC LIMIT 50',
+  );
+  const routing = routingStatus(log, settings.inbox_address, settings.inbox_domain);
+  return c.json({ dns, mx, routing: routing.status, other_address: routing.other });
 });
 
 /** New address; the old one stops working immediately. */

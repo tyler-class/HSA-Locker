@@ -8,3 +8,4 @@ export * from './verification';
 export * from './files';
 export * from './csv';
 export * from './filter';
+export * from './dns';

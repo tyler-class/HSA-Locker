@@ -113,6 +113,8 @@ export interface Settings {
   hsa_cards: string[];
   family_names: string[];
   inbox_domain: string | null;
+  /** The part before the @ (random unless the person chose one). */
+  inbox_local: string;
   inbox_address: string | null;
   inbox_paused: boolean;
   inbox_min_kb: number;
