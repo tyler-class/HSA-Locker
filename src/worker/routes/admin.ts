@@ -555,3 +555,57 @@ admin.post('/delete-everything', async (c) => {
   ]);
   return c.json({ ok: true });
 });
+
+// ---------- AI ----------
+
+/** A synthetic receipt, read with the active provider, so Settings → AI can prove it works. */
+const TEST_RECEIPT = `SAMPLE CLINIC (test document, not real)
+Patient: Sam Example
+Date of service: 03/05/2024
+Office visit
+Amount paid: $45.00
+Visa ending 1234`;
+
+admin.post('/ai/test', async (c) => {
+  const { getProvider: provider, ProviderError } = await import('../extract/providers');
+  const { systemPrompt, textPrompt } = await import('../extract/prompt');
+  const { extractionSchema, parseModelJson, draftsFrom } = await import('@shared/extraction');
+  const p = provider(c.env);
+  const started = Date.now();
+  try {
+    const categories = (await loadCategories(c.env.DB)).map((x) => x.name);
+    const text =
+      p.id === 'fake'
+        ? `${TEST_RECEIPT}\nFAKE_EXTRACTION:{"document_type":"Receipt","line_items":[{"amount":"45.00","appointment_date":"2024-03-05"}]}`
+        : TEST_RECEIPT;
+    const r = await p.complete({
+      system: systemPrompt(categories),
+      user: textPrompt(text, 'test.txt'),
+    });
+    const { kind, drafts } = draftsFrom(extractionSchema.parse(parseModelJson(r.text)));
+    const d = drafts[0];
+    const ok = kind === 'receipt' && d?.amount_cents === 4500 && d?.service_date === '2024-03-05';
+    return c.json({
+      ok,
+      provider: p.id,
+      model: r.model,
+      ms: Date.now() - started,
+      result: d
+        ? {
+            kind,
+            amount_cents: d.amount_cents,
+            service_date: d.service_date,
+            patient: d.patient_name_raw,
+            card_last4: d.card_last4,
+          }
+        : { kind },
+    });
+  } catch (e) {
+    return c.json({
+      ok: false,
+      provider: p.id,
+      ms: Date.now() - started,
+      error: e instanceof ProviderError ? e.message : 'invalid_reply',
+    });
+  }
+});

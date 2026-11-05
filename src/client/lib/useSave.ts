@@ -1,9 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { errorMessage } from './api';
-import { keys } from './queries';
+import { DATA_KEYS } from './queries';
 
-/** Runs an API call, refreshes app state, and tracks busy/error for a form. */
+/** Runs an API call, refreshes data, and tracks busy/error for a form. */
 export function useSave() {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -16,10 +16,9 @@ export function useSave() {
     setError('');
     try {
       const r = await fn();
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: keys.state }),
-        ...extraKeys.map((k) => qc.invalidateQueries({ queryKey: k })),
-      ]);
+      await Promise.all(
+        [...DATA_KEYS, ...extraKeys].map((k) => qc.invalidateQueries({ queryKey: k })),
+      );
       return r;
     } catch (e) {
       setError(errorMessage(e));

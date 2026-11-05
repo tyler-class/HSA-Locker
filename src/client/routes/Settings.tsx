@@ -1,0 +1,507 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { useRef, useState } from 'react';
+import { Link } from 'react-router';
+import { exportFilename, extForMime, uniqueNames } from '@shared/logic';
+import type { YearBasis } from '@shared/types';
+import { AboutButton } from '../components/AboutSheet';
+import { Icon } from '../components/Icon';
+import { InstallHint } from '../components/InstallHint';
+import { useToast } from '../components/Toast';
+import {
+  ErrorText,
+  GhostButton,
+  IconButton,
+  PageHeader,
+  PrimaryButton,
+  SectionLabel,
+  Segmented,
+  Sheet,
+  TextInput,
+} from '../components/ui';
+import { api, errorMessage } from '../lib/api';
+import { useAppState } from '../lib/queries';
+import { useSave } from '../lib/useSave';
+import { useTheme, type Theme } from '../lib/theme';
+import { readStoredZip, ZipWriter } from '../lib/zip';
+import { ConnectAISection } from './ConnectAI';
+import { CategoriesEditor, PeopleEditor, ProvidersEditor } from './SettingsLists';
+
+function Row({
+  icon,
+  children,
+  onClick,
+  href,
+  to,
+}: {
+  icon: Parameters<typeof Icon>[0]['name'];
+  children: React.ReactNode;
+  onClick?: () => void;
+  href?: string;
+  to?: string;
+}) {
+  const cls =
+    'flex w-full items-center gap-3 border-b border-line py-3.5 text-left text-base text-ink';
+  const inner = (
+    <>
+      <Icon name={icon} size={18} className="text-accent" />
+      <span className="flex-1">{children}</span>
+      <Icon name="chevRight" className="text-faint" />
+    </>
+  );
+  if (to)
+    return (
+      <Link to={to} className={cls}>
+        {inner}
+      </Link>
+    );
+  if (href)
+    return (
+      <a href={href} download className={cls}>
+        {inner}
+      </a>
+    );
+  return (
+    <button onClick={onClick} className={cls}>
+      {inner}
+    </button>
+  );
+}
+
+export function Settings() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const { data: state } = useAppState();
+  const { run, busy, error } = useSave();
+  const [theme, setTheme] = useTheme();
+  const [restore, setRestore] = useState<{ file: File; data: unknown } | null>(null);
+  const [restoreError, setRestoreError] = useState('');
+  const [card, setCard] = useState('');
+  const [zipStatus, setZipStatus] = useState('');
+  const [danger, setDanger] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [aiTest, setAiTest] = useState<string>('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const zipRef = useRef<HTMLInputElement>(null);
+  if (!state) return null;
+  const s = state.settings;
+
+  async function pickFile(f: File | undefined) {
+    if (!f) return;
+    setRestoreError('');
+    try {
+      setRestore({ file: f, data: JSON.parse(await f.text()) });
+    } catch {
+      setRestoreError('That file isn’t an HSA Locker backup.');
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  /** Builds the documents ZIP in the browser: originals with readable names, plus ledger.csv. */
+  async function downloadDocuments() {
+    setZipStatus('Preparing…');
+    try {
+      const m = await api.get<{
+        documents: {
+          id: string;
+          mime: string;
+          date: string | null;
+          person: string | null;
+          provider: string | null;
+          amount_cents: number | null;
+          received_at: string;
+        }[];
+      }>('/export/manifest');
+      const names = uniqueNames(
+        m.documents.map(
+          (d) =>
+            `${d.id.slice(0, 8)}_${exportFilename({ date: d.date, person: d.person, provider: d.provider, amount_cents: d.amount_cents, ext: extForMime(d.mime) })}`,
+        ),
+      );
+      const zip = new ZipWriter();
+      const manifest: { name: string; document_id: string }[] = [];
+      for (const [i, d] of m.documents.entries()) {
+        setZipStatus(`Adding ${i + 1} of ${m.documents.length}…`);
+        const res = await fetch(`/api/files/${d.id}?download=1`, { credentials: 'same-origin' });
+        if (!res.ok) continue;
+        zip.add(
+          `documents/${names[i]}`,
+          new Uint8Array(await res.arrayBuffer()),
+          new Date(d.received_at),
+        );
+        manifest.push({ name: `documents/${names[i]}`, document_id: d.id });
+      }
+      const csv = await (
+        await fetch('/api/export/ledger.csv', { credentials: 'same-origin' })
+      ).text();
+      zip.add('ledger.csv', new TextEncoder().encode(csv));
+      zip.add('manifest.json', new TextEncoder().encode(JSON.stringify(manifest, null, 2)));
+      const url = URL.createObjectURL(zip.finish());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `hsa-locker-documents-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setZipStatus('');
+    } catch (e) {
+      setZipStatus(errorMessage(e));
+    }
+  }
+
+  /** Puts files back from a documents ZIP (after restoring a JSON backup on a new instance). */
+  async function restoreFiles(f: File | undefined) {
+    if (!f) return;
+    setZipStatus('Reading…');
+    try {
+      const files = readStoredZip(await f.arrayBuffer());
+      const manifest = files.find((x) => x.name === 'manifest.json');
+      if (!manifest)
+        throw new Error('That ZIP has no manifest.json. Use a documents export from HSA Locker.');
+      const list = JSON.parse(new TextDecoder().decode(manifest.data)) as {
+        name: string;
+        document_id: string;
+      }[];
+      let n = 0;
+      for (const item of list) {
+        const file = files.find((x) => x.name === item.name);
+        if (!file) continue;
+        setZipStatus(`Restoring ${++n} of ${list.length}…`);
+        const res = await fetch(`/api/restore-file/${item.document_id}`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body: file.data as BodyInit,
+        });
+        if (!res.ok && res.status !== 404) throw new Error(`Restore failed (${res.status}).`);
+      }
+      setZipStatus('');
+      toast({ text: `Restored ${n} files` });
+    } catch (e) {
+      setZipStatus(errorMessage(e));
+    }
+    if (zipRef.current) zipRef.current.value = '';
+  }
+
+  return (
+    <div className="pb-12">
+      <PageHeader
+        title="Settings"
+        icon="settings"
+        action={<AboutButton variant="header" className="md:hidden" />}
+      />
+
+      <SectionLabel icon="inbox">Inbox</SectionLabel>
+      <div className="px-6 pt-1">
+        <Row icon="mail" to="/settings/inbox">
+          {s.inbox_address ? (
+            <span className="flex flex-col">
+              Email inbox {s.inbox_paused ? '(paused)' : ''}
+              <span className="truncate font-mono text-xs text-soft">{s.inbox_address}</span>
+            </span>
+          ) : (
+            'Set up email forwarding'
+          )}
+        </Row>
+        {state.counts.failed > 0 && (
+          <p className="pt-2 text-sm text-warn">
+            {state.counts.failed} document{state.counts.failed === 1 ? '' : 's'} couldn’t be read
+            yet.{' '}
+            <button
+              className="text-accent"
+              onClick={() => run(() => api.post('/documents/retry-failed'))}
+            >
+              Retry now
+            </button>
+          </p>
+        )}
+      </div>
+
+      <SectionLabel icon="users">People</SectionLabel>
+      <PeopleEditor state={state} />
+
+      <SectionLabel icon="card">Reimbursing</SectionLabel>
+      <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
+        <span className="text-ink">HSA cards</span>
+        <p className="text-soft">
+          Receipts paid with these cards are excluded as “Paid with the HSA card”. Others (or with
+          no card printed) stay reimbursable.
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {s.hsa_cards.map((c) => (
+            <span
+              key={c}
+              className="inline-flex items-center gap-1 rounded-full bg-chip py-0.5 pr-1 pl-3"
+            >
+              •••• {c}
+              <IconButton
+                icon="x"
+                label={`Remove card ${c}`}
+                className="h-6 w-6"
+                onClick={() =>
+                  run(() =>
+                    api.patch('/settings', { hsa_cards: s.hsa_cards.filter((x) => x !== c) }),
+                  )
+                }
+              />
+            </span>
+          ))}
+        </div>
+        <form
+          className="flex gap-2"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (card.length !== 4) return;
+            if (await run(() => api.patch('/settings', { hsa_cards: [...s.hsa_cards, card] })))
+              setCard('');
+          }}
+        >
+          <TextInput
+            inputMode="numeric"
+            maxLength={4}
+            placeholder="Last 4 digits"
+            value={card}
+            onChange={(e) => setCard(e.target.value.replace(/\D/g, ''))}
+          />
+          <GhostButton type="submit" icon="plus" disabled={card.length !== 4 || busy}>
+            Add
+          </GhostButton>
+        </form>
+        <span className="pt-2 text-ink">Count a receipt in the year of its</span>
+        <Segmented<YearBasis>
+          label="Year basis"
+          value={s.year_basis}
+          onChange={(year_basis) => run(() => api.patch('/settings', { year_basis }))}
+          options={[
+            ['service_date', 'Service date'],
+            ['payment_date', 'Payment date'],
+          ]}
+        />
+        <ErrorText>{error}</ErrorText>
+      </div>
+
+      <SectionLabel icon="tag">Providers</SectionLabel>
+      <ProvidersEditor state={state} />
+
+      <SectionLabel icon="layers">Categories</SectionLabel>
+      <CategoriesEditor state={state} />
+
+      <SectionLabel icon="ai">Reading documents</SectionLabel>
+      <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
+        <p className="text-ink">
+          {state.ai.provider === 'workers-ai' ? 'Workers AI' : state.ai.provider} ·{' '}
+          <span className="font-mono text-xs">{state.ai.text_model}</span>
+          {state.ai.gateway ? ' · through AI Gateway' : ''}
+        </p>
+        <p
+          className={
+            state.ai.third_party ? 'rounded-lg bg-warn-tint px-3 py-2 text-warn' : 'text-soft'
+          }
+        >
+          {state.ai.third_party
+            ? `Documents are sent to ${state.ai.provider} to be read. They contain health information. That provider’s terms apply.`
+            : 'Documents are read by Workers AI inside your own Cloudflare account. They aren’t sent to any other company.'}
+        </p>
+        <p className="text-soft">
+          To use your own Anthropic, OpenAI or Gemini key instead, set the Worker secrets{' '}
+          <span className="font-mono text-xs">LLM_PROVIDER</span>,{' '}
+          <span className="font-mono text-xs">LLM_API_KEY</span> and optionally{' '}
+          <span className="font-mono text-xs">LLM_MODEL</span> in the Cloudflare dashboard (Workers
+          → hsa-locker → Settings → Variables and Secrets). Keys are never stored in the app.
+        </p>
+        <p className="text-xs text-faint">HSA Locker makes no HIPAA compliance claims.</p>
+        <div className="flex items-center gap-3">
+          <PrimaryButton
+            tone="secondary"
+            disabled={aiTest === 'Testing…'}
+            onClick={async () => {
+              setAiTest('Testing…');
+              try {
+                const r = await api.post<{
+                  ok: boolean;
+                  ms: number;
+                  model?: string;
+                  error?: string;
+                }>('/ai/test');
+                setAiTest(
+                  r.ok
+                    ? `Works: read a sample receipt in ${(r.ms / 1000).toFixed(1)} s.`
+                    : `Didn’t work (${r.error ?? 'wrong result'}).`,
+                );
+              } catch (e) {
+                setAiTest(errorMessage(e));
+              }
+            }}
+          >
+            Test extraction
+          </PrimaryButton>
+          <span className="text-soft">{aiTest}</span>
+        </div>
+      </div>
+
+      <SectionLabel icon="archive">Backup</SectionLabel>
+      <p className="px-6 pt-4 text-sm text-soft">
+        The data backup is one JSON file. The documents export is a ZIP of every original file,
+        named by date, person, provider and amount, plus a ledger.csv: an audit packet.
+      </p>
+      <div className="flex flex-col px-6 pt-1">
+        <Row icon="download" href="/api/export">
+          Download data backup (JSON)
+        </Row>
+        <Row icon="download" onClick={downloadDocuments}>
+          Download all documents (ZIP)
+        </Row>
+        <Row icon="download" href="/api/export/ledger.csv">
+          Download ledger (CSV)
+        </Row>
+        <Row icon="upload" onClick={() => fileRef.current?.click()}>
+          Restore data from backup…
+        </Row>
+        <Row icon="upload" onClick={() => zipRef.current?.click()}>
+          Restore documents from ZIP…
+        </Row>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={(e) => pickFile(e.target.files?.[0])}
+        />
+        <input
+          ref={zipRef}
+          type="file"
+          accept="application/zip,.zip"
+          hidden
+          onChange={(e) => restoreFiles(e.target.files?.[0])}
+        />
+        {zipStatus && (
+          <p className="pt-2 text-sm text-soft" role="status">
+            {zipStatus}
+          </p>
+        )}
+        <ErrorText>{restoreError}</ErrorText>
+      </div>
+
+      <ConnectAISection />
+
+      <SectionLabel icon="palette">Appearance</SectionLabel>
+      <div className="px-6 pt-4 pb-2">
+        <Segmented<Theme>
+          label="Appearance"
+          value={theme}
+          onChange={setTheme}
+          options={[
+            ['light', 'Light'],
+            ['dark', 'Dark'],
+            ['system', 'System'],
+          ]}
+        />
+      </div>
+
+      <SectionLabel icon="phone">Install on your phone</SectionLabel>
+      <div className="px-6 py-4">
+        <InstallHint />
+      </div>
+
+      <SectionLabel icon="user">Account</SectionLabel>
+      <div className="px-6 pt-2">
+        <button
+          className="flex w-full items-center gap-3 border-y border-line py-3.5 text-left text-base text-ink"
+          onClick={async () => {
+            try {
+              await api.post('/logout');
+            } finally {
+              qc.clear();
+              window.location.href = '/';
+            }
+          }}
+        >
+          <Icon name="logout" size={18} className="text-accent" />
+          <span className="flex-1">Sign out of this device</span>
+        </button>
+        <div className="hidden pt-2 md:block">
+          <AboutButton variant="nav" className="-ml-3.5" />
+        </div>
+      </div>
+
+      <SectionLabel icon="trash">Danger zone</SectionLabel>
+      <div className="px-6 pt-3">
+        <GhostButton icon="trash" className="-ml-3 text-danger" onClick={() => setDanger(true)}>
+          Delete all data…
+        </GhostButton>
+      </div>
+
+      <Sheet
+        open={!!restore}
+        onClose={() => setRestore(null)}
+        title="Replace everything?"
+        footer={
+          <>
+            <GhostButton onClick={() => setRestore(null)}>Cancel</GhostButton>
+            <PrimaryButton
+              tone="danger"
+              disabled={busy}
+              onClick={async () => {
+                if (!restore) return;
+                try {
+                  const r = await api.post<{ missing_files: number }>('/import', restore.data);
+                  await qc.invalidateQueries();
+                  setRestore(null);
+                  toast({
+                    text: r.missing_files
+                      ? `Restored. ${r.missing_files} files are missing: restore the documents ZIP next.`
+                      : 'Backup restored',
+                  });
+                } catch (e) {
+                  setRestoreError(errorMessage(e));
+                  setRestore(null);
+                }
+              }}
+            >
+              Restore
+            </PrimaryButton>
+          </>
+        }
+      >
+        <p className="py-2 text-sm text-soft">
+          Everything in this HSA Locker is replaced with the contents of {restore?.file.name}.
+          Document files aren’t in this backup; restore them from a documents ZIP afterwards if this
+          is a new instance. This can’t be undone.
+        </p>
+      </Sheet>
+
+      <Sheet
+        open={danger}
+        onClose={() => setDanger(false)}
+        title="Delete all data?"
+        footer={
+          <>
+            <GhostButton onClick={() => setDanger(false)}>Cancel</GhostButton>
+            <PrimaryButton
+              tone="danger"
+              disabled={busy || confirmText !== 'DELETE EVERYTHING'}
+              onClick={async () => {
+                if (await run(() => api.post('/delete-everything', { confirm: confirmText }))) {
+                  setDanger(false);
+                  await qc.invalidateQueries();
+                  toast({ text: 'Everything was deleted' });
+                }
+              }}
+            >
+              Delete everything
+            </PrimaryButton>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3 py-2 text-sm text-soft">
+          <p>
+            Every document, file, entry, reimbursement, person and provider is deleted. Download a
+            backup first.
+          </p>
+          <label className="flex flex-col gap-1.5">
+            <span>Type DELETE EVERYTHING to confirm</span>
+            <TextInput value={confirmText} onChange={(e) => setConfirmText(e.target.value)} />
+          </label>
+        </div>
+      </Sheet>
+    </div>
+  );
+}

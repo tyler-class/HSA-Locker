@@ -130,8 +130,11 @@ documents.get('/files/:id', async (c) => {
       'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(name)}`,
       'X-Content-Type-Options': 'nosniff',
       'Cache-Control': 'private, no-store',
+      // Chrome's PDF viewer refuses sandboxed documents, so only non-PDFs are sandboxed.
       'Content-Security-Policy':
-        "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+        mime === 'application/pdf'
+          ? "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'"
+          : "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'; sandbox",
       'Cross-Origin-Resource-Policy': 'same-origin',
     },
   });

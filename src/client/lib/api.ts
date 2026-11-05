@@ -65,6 +65,37 @@ export const api = {
   del: <T>(path: string) => request<T>('DELETE', path),
 };
 
+/** Raw-body file upload with progress. One file per request. */
+export function uploadFile(
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<{ duplicate: boolean; document: import('@shared/types').DocumentSummary }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/documents');
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    xhr.onload = () => {
+      const data = parseBody(xhr.responseText) as { message?: string; error?: string };
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data as never);
+      else {
+        if (xhr.status === 401) unauthorizedListeners.forEach((fn) => fn());
+        reject(
+          new ApiError(
+            xhr.status,
+            data?.error ?? 'error',
+            data?.message ?? `Upload failed (${xhr.status}).`,
+          ),
+        );
+      }
+    };
+    xhr.onerror = () => reject(new ApiError(0, 'offline', 'You seem to be offline.'));
+    xhr.send(file);
+  });
+}
+
 export function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : 'Something went wrong.';
 }
