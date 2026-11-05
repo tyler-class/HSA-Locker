@@ -98,13 +98,9 @@ export async function handleEmail(
   );
   if ((today?.n ?? 0) >= settings.inbox_daily_cap) return reject('daily_cap', 'try again tomorrow');
 
+  // Log first, so a failure storing the message still shows up in Settings → Inbox.
   const id = newId();
   const emlKey = `eml/${id}.eml`;
-  // Streams straight through without buffering; R2 needs a known length for a stream body.
-  const { readable, writable } = new FixedLengthStream(message.rawSize);
-  const piped = message.raw.pipeTo(writable);
-  await env.FILES.put(emlKey, readable, { httpMetadata: { contentType: 'message/rfc822' } });
-  await piped;
   await db
     .prepare(
       `INSERT INTO inbox_log (id, received_at, to_addr, from_addr, subject, outcome, eml_key, size_bytes)
@@ -112,6 +108,20 @@ export async function handleEmail(
     )
     .bind(id, nowIso(), to, from, subject?.slice(0, 300) ?? null, emlKey, message.rawSize)
     .run();
+  try {
+    // Read the whole message (≤ 25 MiB) and store it; parsing happens afterwards.
+    const raw = await new Response(message.raw).arrayBuffer();
+    await env.FILES.put(emlKey, raw, { httpMetadata: { contentType: 'message/rfc822' } });
+  } catch (e) {
+    console.error(
+      `inbox ${id}: storing the message failed (${e instanceof Error ? e.name : 'error'})`,
+    );
+    await db
+      .prepare("UPDATE inbox_log SET outcome = 'failed', reason = 'store_failed' WHERE id = ?")
+      .bind(id)
+      .run();
+    throw e;
+  }
   ctx.waitUntil(processInboxMessage(env, id).catch(() => {}));
 }
 

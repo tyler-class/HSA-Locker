@@ -67,6 +67,7 @@ const REASON: Record<string, string> = {
   no_usable_attachments: 'no PDFs or photos',
   empty_message: 'empty',
   too_many_attachments: 'some attachments over the limit',
+  store_failed: 'couldn’t store it',
 };
 
 /** Hostname that has at least three labels (a subdomain), e.g. hsa-in.example.com. */
