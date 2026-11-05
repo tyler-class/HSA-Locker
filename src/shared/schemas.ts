@@ -63,6 +63,14 @@ export const settingsPatch = z.object({
   inbox_daily_cap: z.number().int().min(1).max(1000).optional(),
   inbox_allowlist: z.array(z.string().trim().toLowerCase().min(3).max(254)).max(50).optional(),
   onboarded: z.boolean().optional(),
+  notify_email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email('Enter an email address.')
+    .nullable()
+    .optional(),
+  notify_daily: z.boolean().optional(),
 });
 
 export const entryFields = z.object({

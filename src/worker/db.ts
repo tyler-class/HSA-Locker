@@ -259,5 +259,7 @@ export async function loadSettings(db: D1Database): Promise<Settings> {
     inbox_daily_cap: num(m.get('inbox_daily_cap'), INBOX_DEFAULTS.daily_cap),
     inbox_allowlist: arr(m.get('inbox_allowlist_json')),
     onboarded: m.get('onboarded') === '1',
+    notify_email: m.get('notify_email') || null,
+    notify_daily: m.get('notify_daily') === '1',
   };
 }

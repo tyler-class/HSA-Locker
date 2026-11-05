@@ -35,6 +35,9 @@
   ],
   // Workers AI reads documents. Always runs on Cloudflare, even in `npm run dev`.
   "ai": { "binding": "AI" },
+  // Sends the optional daily review reminder. Only to addresses verified in Email Routing
+  // (Destination addresses), which is free on every plan and needs no extra DNS.
+  "send_email": [{ "name": "EMAIL" }],
   // Picks up documents waiting to be read, stuck, or due for a retry.
   "triggers": { "crons": ["*/10 * * * *"] },
 }

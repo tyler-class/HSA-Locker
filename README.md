@@ -9,6 +9,7 @@ Keep every medical receipt and EOB for your HSA in one place, and always know ho
 - **Checked, not guessed.** An amount that isn’t printed in the document, an unknown patient, a likely duplicate or a date in the future goes to **Review** instead of into your totals.
 - **What you can reimburse.** Home shows outstanding reimbursable, reimbursed and documented per year. EOB lines are kept for reference and never count as money. Receipts paid with your HSA card are excluded automatically.
 - **Record reimbursements.** Select receipts, record the withdrawal, and compare the total with your HSA statement. Undo any time.
+- **Review reminders.** Optionally, a daily email when something is waiting in Review, sent by the Worker itself to an address you verify in Cloudflare.
 - **Email inbox.** Give HSA Locker a private address on a subdomain you own and set your mail to forward receipts and EOBs to it. Gmail’s forwarding confirmation code shows up right in the app.
 - **People and providers.** “Olivia”, “Olivia Class” and “Class, Olivia” are one person; “Grand Rapids Surgical Suit” on an EOB can be the same provider as on the receipt.
 - **Exports.** A CSV of the ledger (any filter), a JSON backup, and a ZIP of every original named by date, person, provider and amount: an audit packet.

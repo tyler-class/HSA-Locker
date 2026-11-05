@@ -41,6 +41,7 @@ import {
   updateStmt,
 } from '../db';
 import { getProvider, providerMisconfigured } from '../extract/providers';
+import { rememberOrigin, sendReminder } from '../notify';
 import sample from '../../../seed/sample.json';
 import { refreshDocs } from '../status';
 import { ApiError, body, notFound, type AppEnv } from './util';
@@ -49,6 +50,12 @@ export const admin = new Hono<AppEnv>();
 
 admin.get('/state', async (c) => {
   const db = c.env.DB;
+  // Remembered for links in emails sent from cron. Best-effort (tests have no execution context).
+  try {
+    c.executionCtx.waitUntil(rememberOrigin(db, new URL(c.req.url).origin).catch(() => {}));
+  } catch {
+    /* no execution context */
+  }
   const [settings, people, providers, categories, counts] = await Promise.all([
     loadSettings(db),
     loadPeople(db),
@@ -108,6 +115,8 @@ admin.patch('/settings', async (c) => {
   if (input.inbox_daily_cap !== undefined) set('inbox_daily_cap', String(input.inbox_daily_cap));
   if (input.inbox_allowlist) set('inbox_allowlist_json', JSON.stringify(input.inbox_allowlist));
   if (input.onboarded !== undefined) set('onboarded', input.onboarded ? '1' : '0');
+  if (input.notify_email !== undefined) set('notify_email', input.notify_email ?? '');
+  if (input.notify_daily !== undefined) set('notify_daily', input.notify_daily ? '1' : '0');
   if (stmts.length) await db.batch(stmts);
 
   // A changed card list re-applies paid_with_hsa to receipts (automatic exclusions only).
@@ -609,4 +618,12 @@ admin.post('/ai/test', async (c) => {
       error: e instanceof ProviderError ? e.message : 'invalid_reply',
     });
   }
+});
+
+// ---------- notifications ----------
+
+/** Sends the review reminder right now, to check the setup. */
+admin.post('/notify/test', async (c) => {
+  await rememberOrigin(c.env.DB, new URL(c.req.url).origin);
+  return c.json(await sendReminder(c.env, { test: true }));
 });

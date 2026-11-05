@@ -123,6 +123,9 @@ export interface Settings {
   inbox_daily_cap: number;
   inbox_allowlist: string[];
   onboarded: boolean;
+  /** Where the daily review reminder goes (verified in Email Routing → Destination addresses). */
+  notify_email: string | null;
+  notify_daily: boolean;
 }
 
 export interface AiInfo {

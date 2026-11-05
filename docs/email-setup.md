@@ -54,7 +54,7 @@ HEIC photos can be stored but not read by Workers AI; they go to Review. iPhones
 - Per-message limits (attachments, size) and a daily cap, all adjustable under Settings → Inbox → Limits. **Accept new mail** pauses the inbox.
 - An optional sender allow list. It’s secondary: auto-forwarded mail keeps the original sender, so it can’t be the main gate.
 - Cloudflare rejects messages that fail the sender’s DMARC policy (or both SPF and DKIM) before they reach the Worker. Email Routing’s own size limit is 25 MiB.
-- HSA Locker never sends email: no replies, no bounces. Everything is visible in the app.
+- HSA Locker never replies to or bounces incoming mail. Everything is visible in the app.
 
 ## Optional: a vanity address on your main domain
 
@@ -63,3 +63,13 @@ To give people `hsalocker@example.com` without touching your main domain’s MX 
 ## CPU limits
 
 The `email()` handler only checks the recipient, size and limits, and streams the raw message to R2; parsing happens right after. On the Workers free plan (10 ms CPU per invocation) parsing larger messages can still run out of CPU and is retried by the sweeper, then marked failed. **Workers Paid is recommended if you use email.**
+
+## Daily review reminder (optional)
+
+HSA Locker can email you once a day when something is waiting in Review. It uses the Worker's built-in `send_email` binding; no outside email service is involved.
+
+1. In Cloudflare: **Email → Email Routing → Destination addresses → Add destination address**, enter your email, and click the link in the verification email Cloudflare sends. Sending to verified addresses is free on every plan.
+2. In HSA Locker: **Settings → Notifications**, enter the same address, Save, and turn on **Daily email when something needs review**.
+3. **Send a test** checks the setup and says what's wrong if it fails.
+
+The reminder comes from `reminders@<your inbox subdomain>`, goes out after 13:00 UTC (8–9 a.m. US Eastern), at most once a day, and only when at least one document needs review.

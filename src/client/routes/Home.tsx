@@ -68,7 +68,7 @@ export function Home() {
           to="/review"
           className="mx-5 mt-2 flex items-center gap-3 rounded-xl bg-warn-tint px-4 py-3 text-sm text-warn"
         >
-          <Icon name="review" size={18} />
+          <Icon name="search" size={18} />
           <span className="flex-1 font-medium">
             {plural(review, 'document')} need{review === 1 ? 's' : ''} review
             {s && s.totals.pending_review_cents > 0

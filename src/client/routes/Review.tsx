@@ -33,7 +33,7 @@ export function Review() {
   if (!review.isPending && !current)
     return (
       <div>
-        <PageHeader title="Review" icon="review" />
+        <PageHeader title="Review" icon="search" />
         <Empty title="All caught up">
           Nothing is waiting for review. Documents that need a look show up here.
         </Empty>
@@ -44,7 +44,7 @@ export function Review() {
     <div className="pb-12">
       <PageHeader
         title="Review"
-        icon="review"
+        icon="search"
         sub={ids.length ? `${index + 1} of ${plural(ids.length, 'document')}` : undefined}
         action={
           <div className="flex gap-1">

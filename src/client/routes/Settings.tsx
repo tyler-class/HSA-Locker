@@ -14,6 +14,7 @@ import {
   PrimaryButton,
   SectionLabel,
   Segmented,
+  Switch,
   Sheet,
   TextInput,
 } from '../components/ui';
@@ -272,6 +273,8 @@ export function Settings() {
 
       <SectionLabel icon="layers">Categories</SectionLabel>
       <CategoriesEditor state={state} />
+
+      <Notifications />
 
       <SectionLabel icon="ai">Reading documents</SectionLabel>
       <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
@@ -548,5 +551,84 @@ function OwnKeyHelp() {
         </p>
       </div>
     </details>
+  );
+}
+
+/** Settings → Notifications: the daily review reminder email. */
+function Notifications() {
+  const { data: state } = useAppState();
+  const { run, busy, error } = useSave();
+  const [email, setEmail] = useState(state?.settings.notify_email ?? '');
+  const [result, setResult] = useState('');
+  if (!state) return null;
+  const s = state.settings;
+  const valid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
+  return (
+    <>
+      <SectionLabel icon="mail">Notifications</SectionLabel>
+      <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
+        <div className="flex items-center gap-3">
+          <span className="flex-1 text-ink">Daily email when something needs review</span>
+          <Switch
+            label="Daily review reminder"
+            on={s.notify_daily}
+            disabled={!s.notify_email}
+            onChange={(notify_daily) => run(() => api.patch('/settings', { notify_daily }))}
+          />
+        </div>
+        <form
+          className="flex w-full gap-2 sm:w-2/3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            await run(() =>
+              api.patch('/settings', {
+                notify_email: email.trim() || null,
+                ...(email.trim() ? {} : { notify_daily: false }),
+              }),
+            );
+          }}
+        >
+          <TextInput
+            type="email"
+            aria-label="Reminder email address"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <PrimaryButton
+            tone="secondary"
+            type="submit"
+            disabled={
+              busy || (email.trim() !== '' && !valid) || email.trim() === (s.notify_email ?? '')
+            }
+          >
+            Save
+          </PrimaryButton>
+        </form>
+        <p className="text-xs text-faint">
+          {s.inbox_domain
+            ? `Verify this address once in Cloudflare: Email Routing → Destination addresses. Sent around 8 a.m. Eastern from reminders@${s.inbox_domain}.`
+            : 'Set up the email inbox first: reminders are sent from it.'}
+        </p>
+        <div className="flex items-center gap-3">
+          <GhostButton
+            icon="mail"
+            className="-ml-3 text-accent"
+            disabled={busy || !s.notify_email || !s.inbox_domain}
+            onClick={async () => {
+              setResult('Sending…');
+              const r = await run(() =>
+                api.post<{ sent: boolean; reason?: string }>('/notify/test'),
+              );
+              setResult(r ? (r.sent ? 'Sent. Check your inbox.' : (r.reason ?? 'Not sent.')) : '');
+            }}
+          >
+            Send a test
+          </GhostButton>
+          {result && <span className="text-soft">{result}</span>}
+        </div>
+        <ErrorText>{error}</ErrorText>
+      </div>
+    </>
   );
 }

@@ -10,6 +10,7 @@ import { handleAuthorize } from './consent';
 import { dueInboxMessages, handleEmail, processInboxMessage, type IncomingMessage } from './email';
 import { sweep } from './extract/pipeline';
 import { mcpApiHandler } from './mcp';
+import { sendReminder } from './notify';
 
 /** Headers on every API response. The app's pages get theirs (CSP included) from public/_headers. */
 const API_HEADERS: Record<string, string> = {
@@ -87,6 +88,8 @@ export default {
       for (const id of await dueInboxMessages(env.DB, 5)) await processInboxMessage(env, id);
       const n = await sweep(env, 5);
       if (n) console.log(`sweeper: ${n} document(s) processed`);
+      const r = await sendReminder(env);
+      if (r.sent) console.log('reminder: sent');
     } catch (e) {
       console.warn(`sweeper failed: ${e instanceof Error ? e.name : 'error'}`);
     }

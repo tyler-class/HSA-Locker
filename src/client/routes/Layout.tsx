@@ -7,7 +7,7 @@ import { useAppState } from '../lib/queries';
 const TABS: [string, string, IconName][] = [
   ['/', 'Home', 'home'],
   ['/ledger', 'Ledger', 'receipt'],
-  ['/review', 'Review', 'review'],
+  ['/review', 'Review', 'search'],
   ['/settings', 'Settings', 'settings'],
 ];
 
