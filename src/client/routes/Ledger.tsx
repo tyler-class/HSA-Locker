@@ -64,6 +64,7 @@ export function Ledger() {
     setSelected(new Set());
   };
   const chosen = rows.filter((e) => selected.has(e.id));
+  const allOn = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const receiptsTotal = rows
     .filter((e) => e.type === 'receipt')
     .reduce((s, e) => s + (e.amount_cents ?? 0), 0);
@@ -94,59 +95,60 @@ export function Ledger() {
         <Empty title="Nothing matches">Try fewer filters, or upload a receipt.</Empty>
       ) : (
         <ul className="px-5 pt-2" aria-label="Entries">
-          <li className="flex items-center gap-3 border-b border-line py-2 text-xs text-soft">
-            <input
-              type="checkbox"
-              aria-label="Select all"
-              className="h-4 w-4 accent-[var(--accent)]"
-              checked={rows.length > 0 && rows.every((r) => selected.has(r.id))}
-              onChange={(e) =>
-                setSelected(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())
-              }
-            />
-            Select all
+          <li className="border-b border-line">
+            <button
+              type="button"
+              onClick={() => setSelected(allOn ? new Set() : new Set(rows.map((r) => r.id)))}
+              className="flex items-center gap-3.5 px-3 py-2.5 text-sm text-soft"
+            >
+              <SelectDot on={allOn} />
+              {allOn ? 'Deselect all' : 'Select all'}
+            </button>
           </li>
           {rows.map((e) => (
-            <li
-              key={e.id}
-              className={cx(
-                'flex items-center gap-3 border-b border-line',
-                selected.has(e.id) && 'bg-accent-tint/50',
-              )}
-            >
-              <input
-                type="checkbox"
-                aria-label="Select"
-                className="h-4 w-4 flex-none accent-[var(--accent)]"
-                checked={selected.has(e.id)}
-                onChange={() => toggle(e.id)}
-              />
-              <button
-                onClick={() => setOpen(e)}
-                className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left"
+            <li key={e.id} className="border-b border-line">
+              <div
+                className={cx(
+                  'flex items-center px-3',
+                  selected.has(e.id) && 'my-1 rounded-xl bg-accent-tint',
+                )}
               >
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-[15px]">
-                    {names.providerOf(e)}
-                    {e.type === 'eob' && e.description ? (
-                      <span className="text-soft"> · {e.description}</span>
-                    ) : null}
+                <button
+                  type="button"
+                  aria-label={selected.has(e.id) ? 'Deselect' : 'Select'}
+                  aria-pressed={selected.has(e.id)}
+                  onClick={() => toggle(e.id)}
+                  className="flex h-full flex-none items-center py-3 pr-3.5"
+                >
+                  <SelectDot on={selected.has(e.id)} />
+                </button>
+                <button
+                  onClick={() => setOpen(e)}
+                  className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left"
+                >
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate text-[15px]">
+                      {names.providerOf(e)}
+                      {e.type === 'eob' && e.description ? (
+                        <span className="text-soft"> · {e.description}</span>
+                      ) : null}
+                    </span>
+                    <span className="truncate text-xs text-soft">
+                      {names.personOf(e)} ·{' '}
+                      {shortDate(entryDate(e, state.settings.year_basis)) || 'No date'}
+                      {names.categoryOf(e) ? ` · ${names.categoryOf(e)}` : ''}
+                      {e.excluded_reason ? ` · ${excludedText(e)}` : ''}
+                    </span>
+                    {e.review_reasons.length > 0 && <ReasonChips reasons={e.review_reasons} />}
                   </span>
-                  <span className="truncate text-xs text-soft">
-                    {names.personOf(e)} ·{' '}
-                    {shortDate(entryDate(e, state.settings.year_basis)) || 'No date'}
-                    {names.categoryOf(e) ? ` · ${names.categoryOf(e)}` : ''}
-                    {e.excluded_reason ? ` · ${excludedText(e)}` : ''}
+                  <span className="flex flex-none flex-col items-end gap-1">
+                    <span className="text-[15px] tnum">
+                      {e.type === 'receipt' ? money(e.amount_cents) : ''}
+                    </span>
+                    <StatusChip entry={e} />
                   </span>
-                  {e.review_reasons.length > 0 && <ReasonChips reasons={e.review_reasons} />}
-                </span>
-                <span className="flex flex-none flex-col items-end gap-1">
-                  <span className="text-[15px] tnum">
-                    {e.type === 'receipt' ? money(e.amount_cents) : ''}
-                  </span>
-                  <StatusChip entry={e} />
-                </span>
-              </button>
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -258,5 +260,19 @@ export function Ledger() {
       <EntrySheet entry={open} onClose={() => setOpen(null)} />
       <UploadSheet open={upload} onClose={() => setUpload(false)} />
     </div>
+  );
+}
+
+/** Duffel's selection mark: a round check, filled when selected. */
+function SelectDot({ on }: { on: boolean }) {
+  return (
+    <span
+      className={cx(
+        'grid h-5 w-5 flex-none place-items-center rounded-full border-[1.5px] transition-colors',
+        on ? 'border-accent bg-accent text-accent-ink' : 'border-faint',
+      )}
+    >
+      {on && <Icon name="check" size={14} strokeWidth={2.4} />}
+    </span>
   );
 }
