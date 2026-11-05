@@ -3,8 +3,19 @@ import type { DocumentSummary } from '@shared/types';
 import { Icon } from './Icon';
 import { cx } from './ui';
 
-/** The original file, shown inline: PDFs in a frame, images as images, email bodies as text. */
-export function DocPreview({ doc, className }: { doc: DocumentSummary; className?: string }) {
+/**
+ * The original file, shown inline: PDFs in a frame, images as images, email bodies as text.
+ * `fill` makes it take its container's height (side-by-side panes) instead of a fixed height.
+ */
+export function DocPreview({
+  doc,
+  className,
+  fill,
+}: {
+  doc: DocumentSummary;
+  className?: string;
+  fill?: boolean;
+}) {
   const src = `/api/files/${doc.id}`;
   const isText = doc.mime.startsWith('text/');
   const text = useQuery({
@@ -13,23 +24,27 @@ export function DocPreview({ doc, className }: { doc: DocumentSummary; className
     queryFn: async () => (await fetch(src, { credentials: 'same-origin' })).text(),
     staleTime: Infinity,
   });
+  const height = fill ? 'h-full min-h-[320px]' : 'h-[70vh] min-h-[420px]';
   const box = cx('w-full overflow-hidden rounded-xl border border-line bg-surface', className);
   if (doc.status === 'discarded')
     return <div className={cx(box, 'p-6 text-sm text-soft')}>Discarded.</div>;
   if (doc.mime === 'application/pdf')
-    return <iframe title={doc.filename} src={src} className={cx(box, 'h-[70vh] min-h-[420px]')} />;
+    return <iframe title={doc.filename} src={src} className={cx(box, height)} />;
   if (doc.mime.startsWith('image/') && !/hei[cf]/.test(doc.mime))
     return (
-      <a href={src} target="_blank" rel="noreferrer" className={cx(box, 'block')}>
-        <img src={src} alt={doc.filename} className="h-auto w-full object-contain" />
-      </a>
+      <div className={cx(box, fill ? 'h-full overflow-auto' : '', 'bg-chip')}>
+        <a href={src} target="_blank" rel="noreferrer" className="block">
+          <img src={src} alt={doc.filename} className="h-auto w-full object-contain" />
+        </a>
+      </div>
     );
   if (isText)
     return (
       <pre
         className={cx(
           box,
-          'max-h-[70vh] overflow-auto p-4 font-sans text-sm whitespace-pre-wrap text-ink',
+          fill ? 'h-full' : 'max-h-[70vh]',
+          'overflow-auto p-4 font-sans text-sm whitespace-pre-wrap text-ink',
         )}
       >
         {text.data ?? 'Loading…'}

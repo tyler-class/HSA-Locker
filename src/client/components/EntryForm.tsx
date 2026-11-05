@@ -3,7 +3,7 @@ import { EXCLUDED_REASONS } from '@shared/lookups';
 import { matchProvider } from '@shared/logic';
 import type { AppState, Entry, ExcludedReason } from '@shared/types';
 import { centsInput, parseTypedMoney } from '../lib/format';
-import { ErrorText, Segmented, TextInput } from './ui';
+import { ErrorText, TextInput } from './ui';
 import { Select } from './Select';
 
 export type EntryDraftForm = {
@@ -130,8 +130,8 @@ export function EntryForm({
       : null;
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-3.5">
-      <div className="col-span-2">
-        <Segmented
+      <Field label="Type">
+        <Select<'receipt' | 'eob'>
           label="Type"
           value={value.type}
           onChange={(t) => set('type', t)}
@@ -140,7 +140,8 @@ export function EntryForm({
             ['eob', 'EOB line'],
           ]}
         />
-      </div>
+      </Field>
+      <div />
       <Field label="Service date">
         <TextInput
           type="date"

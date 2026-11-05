@@ -325,6 +325,8 @@ export function Sheet(props: {
   sub?: ReactNode;
   /** Show a close (✕) button, for sheets without a footer. */
   closeButton?: boolean;
+  /** A large two-pane window on desktop and full height on phones. */
+  wide?: boolean;
   children: ReactNode;
   footer?: ReactNode;
 }) {
@@ -337,6 +339,7 @@ function SheetBody({
   title,
   sub,
   closeButton,
+  wide,
   children,
   footer,
 }: {
@@ -344,6 +347,7 @@ function SheetBody({
   title: ReactNode;
   sub?: ReactNode;
   closeButton?: boolean;
+  wide?: boolean;
   children: ReactNode;
   footer?: ReactNode;
 }) {
@@ -416,7 +420,8 @@ function SheetBody({
         aria-modal="true"
         aria-labelledby={titleId}
         className={cx(
-          'sheet-in relative flex max-h-[92dvh] w-full max-w-xl flex-col rounded-t-[18px] bg-surface pb-safe sm:rounded-[18px] sm:shadow-xl',
+          'sheet-in relative flex max-h-[92dvh] w-full flex-col rounded-t-[18px] bg-surface pb-safe sm:rounded-[18px] sm:shadow-xl',
+          wide ? 'h-[92dvh] max-w-6xl md:h-[88dvh]' : 'max-w-xl',
           expanded && 'h-[92dvh]',
         )}
         style={{
@@ -439,7 +444,12 @@ function SheetBody({
             className="absolute top-4 right-4 h-9 w-9 rounded-full bg-chip"
           />
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-2">
+        <div
+          className={cx(
+            'min-h-0 flex-1 px-5 pb-2',
+            wide ? 'flex flex-col overflow-hidden' : 'overflow-y-auto overscroll-contain',
+          )}
+        >
           {children}
         </div>
         {footer && (
@@ -661,7 +671,16 @@ export function Menu({
       <div
         role="menu"
         className="absolute w-72 rounded-xl border border-line bg-surface px-4 py-1 shadow-xl"
-        style={{ top: anchor.bottom + 6, right: Math.max(8, window.innerWidth - anchor.right) }}
+        // Opens below the button, or above it near the bottom of the screen; aligns to the
+        // button's right edge, or its left edge when it sits near the left.
+        style={{
+          ...(window.innerHeight - anchor.bottom < 320
+            ? { bottom: window.innerHeight - anchor.top + 6 }
+            : { top: anchor.bottom + 6 }),
+          ...(anchor.right < 300
+            ? { left: Math.max(8, anchor.left) }
+            : { right: Math.max(8, window.innerWidth - anchor.right) }),
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="[&>div>button:last-child]:border-b-0">{children}</div>
