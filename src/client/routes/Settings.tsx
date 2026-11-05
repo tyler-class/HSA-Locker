@@ -289,13 +289,7 @@ export function Settings() {
             ? `Documents are sent to ${state.ai.provider} to be read. They contain health information. That provider’s terms apply.`
             : 'Documents are read by Workers AI inside your own Cloudflare account. They aren’t sent to any other company.'}
         </p>
-        <p className="text-soft">
-          To use your own Anthropic, OpenAI or Gemini key instead, set the Worker secrets{' '}
-          <span className="font-mono text-xs">LLM_PROVIDER</span>,{' '}
-          <span className="font-mono text-xs">LLM_API_KEY</span> and optionally{' '}
-          <span className="font-mono text-xs">LLM_MODEL</span> in the Cloudflare dashboard (Workers
-          → hsa-locker → Settings → Variables and Secrets). Keys are never stored in the app.
-        </p>
+        <OwnKeyHelp />
         <p className="text-xs text-faint">HSA Locker makes no HIPAA compliance claims.</p>
         <div className="flex items-center gap-3">
           <PrimaryButton
@@ -492,5 +486,67 @@ export function Settings() {
         </div>
       </Sheet>
     </div>
+  );
+}
+
+const SECRETS: [string, string][] = [
+  ['LLM_PROVIDER', 'anthropic, openai or gemini'],
+  ['LLM_API_KEY', 'your API key'],
+  ['LLM_MODEL', 'optional: a different model'],
+];
+
+/** How to switch to your own model key. Keys are Worker secrets, never stored in the app. */
+function OwnKeyHelp() {
+  const toast = useToast();
+  const copy = (t: string) =>
+    void navigator.clipboard
+      ?.writeText(t)
+      .then(() => toast({ text: 'Copied.' }))
+      .catch(() => {});
+  return (
+    <details className="text-soft">
+      <summary className="cursor-pointer text-ink">
+        Use your own Anthropic, OpenAI or Gemini key
+      </summary>
+      <div className="flex flex-col gap-3 pt-3">
+        <p>
+          Add these as secrets in the{' '}
+          <a
+            className="text-accent"
+            href="https://dash.cloudflare.com/?to=/:account/workers/services/view/hsa-locker/production/settings"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Cloudflare dashboard
+          </a>{' '}
+          (Variables and Secrets → Add → Secret), or run the commands from a copy of the code.
+        </p>
+        <ul className="flex flex-col">
+          {SECRETS.map(([name, what]) => {
+            const cmd = `npx wrangler secret put ${name}`;
+            return (
+              <li key={name} className="flex items-center gap-3 border-b border-line py-2">
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="font-mono text-[13px] text-ink">{name}</span>
+                  <span className="text-xs text-faint">{what}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copy(cmd)}
+                  title={cmd}
+                  className="inline-flex flex-none items-center gap-1.5 text-sm text-accent"
+                >
+                  <Icon name="copy" size={14} />
+                  Copy command
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="text-xs text-faint">
+          Keys are never stored in the app. Remove the secrets to go back to Workers AI.
+        </p>
+      </div>
+    </details>
   );
 }
