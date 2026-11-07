@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { checkForUpdate } from '../lib/pwa';
+import { useToast } from './Toast';
 import { Icon, type IconName } from './Icon';
 import { cx, Sheet } from './ui';
 
@@ -26,6 +28,7 @@ export function AboutSheet({ open, onClose }: { open: boolean; onClose: () => vo
         </p>
         <p className="text-sm text-soft">Built by Tyler Class. Not tax or medical advice.</p>
       </div>
+      <CheckForUpdates />
       <div className="pt-3 pb-2">
         {LINKS.map(([href, label, icon]) => (
           <a
@@ -70,5 +73,32 @@ export function AboutButton({
       </button>
       <AboutSheet open={open} onClose={() => setOpen(false)} />
     </>
+  );
+}
+
+/** Reloads into a newer deploy if there is one (the installed app on iOS needs this most). */
+function CheckForUpdates() {
+  const toast = useToast();
+  const [checking, setChecking] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={checking}
+      onClick={async () => {
+        setChecking(true);
+        try {
+          if ((await checkForUpdate()) === 'latest')
+            toast({ text: 'You’re on the latest version.' });
+        } catch {
+          toast({ text: 'Couldn’t check. Are you online?' });
+        } finally {
+          setChecking(false);
+        }
+      }}
+      className="mt-3 inline-flex items-center gap-1.5 self-start rounded-full bg-chip px-3.5 py-2 text-sm text-ink disabled:opacity-60"
+    >
+      <Icon name="refresh" size={15} />
+      {checking ? 'Checking…' : 'Check for updates'}
+    </button>
   );
 }
