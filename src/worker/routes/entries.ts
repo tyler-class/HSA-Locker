@@ -24,6 +24,7 @@ import {
   marks,
   newId,
   nowIso,
+  REVIEW_DOC_WHERE,
   toEntry,
   toLedgerEntry,
   updateStmt,
@@ -90,9 +91,7 @@ entries.get('/review', async (c) => {
   const ledger = (await loadLedger(db)).filter(needsReview);
   const docs = await all(
     db,
-    `SELECT d.id FROM documents d WHERE d.status = 'needs_review'
-     OR (d.status != 'discarded' AND EXISTS (SELECT 1 FROM entries e WHERE e.document_id = d.id AND e.review_reasons_json != '[]'))
-     ORDER BY d.received_at`,
+    `SELECT d.id FROM documents d WHERE ${REVIEW_DOC_WHERE} ORDER BY d.received_at`,
   );
   return c.json({ document_ids: docs.map((d) => String(d.id)), entries: ledger });
 });

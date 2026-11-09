@@ -21,6 +21,7 @@ import { documents } from './routes/documents';
 import { entries } from './routes/entries';
 import { inbox } from './routes/inbox';
 import { legacy } from './routes/legacy';
+import { push } from './notifications';
 import { ApiError, body, type AppEnv } from './routes/util';
 
 export const app = new Hono<AppEnv>().basePath('/api');
@@ -67,6 +68,8 @@ app.route('/', entries);
 app.route('/', inbox);
 app.route('/', legacy);
 app.route('/', connections);
+// Push notifications (Selfhost Kit), behind the guard like everything else here.
+app.route('/', push);
 
 app.notFound((c) => c.json({ error: 'not_found', message: 'No such endpoint.' }, 404));
 

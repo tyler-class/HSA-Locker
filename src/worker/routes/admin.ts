@@ -37,6 +37,7 @@ import {
   loadSettings,
   newId,
   nowIso,
+  REVIEW_DOC_WHERE,
   setSettingStmt,
   toEntry,
   toPerson,
@@ -68,8 +69,7 @@ admin.get('/state', async (c) => {
     first<Record<string, number>>(
       db,
       `SELECT
-        (SELECT COUNT(*) FROM documents d WHERE d.status = 'needs_review'
-           OR (d.status != 'discarded' AND EXISTS (SELECT 1 FROM entries e WHERE e.document_id = d.id AND e.review_reasons_json != '[]'))) AS review_documents,
+        (SELECT COUNT(*) FROM documents d WHERE ${REVIEW_DOC_WHERE}) AS review_documents,
         (SELECT COUNT(*) FROM entries e JOIN documents d ON d.id = e.document_id
            WHERE d.status != 'discarded' AND e.review_reasons_json != '[]') AS review_entries,
         (SELECT COUNT(*) FROM documents WHERE status IN ('pending', 'processing')) AS in_flight,

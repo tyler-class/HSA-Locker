@@ -31,6 +31,7 @@ import {
   type ModelCall,
 } from './providers';
 import { htmlToText, MIN_TEXT_CHARS, pdfText } from './text';
+import { notifyWhenIdle } from '../notifications';
 
 export const MAX_ATTEMPTS = 5;
 export const STALE_MINUTES = 10;
@@ -309,8 +310,17 @@ function docReasons(kind: DocKind, entryCount: number, mime: string): string[] {
 
 export type ProcessResult = 'processed' | 'needs_review' | 'failed' | 'skipped';
 
-/** Processes one document if it's due. Safe to call twice: the second call finds nothing to claim. */
+/**
+ * Processes one document if it's due. Safe to call twice: the second call finds nothing to claim.
+ * Afterwards, push notifications go out for what's now in Review (once nothing else is being read).
+ */
 export async function processDocument(env: Cloudflare.Env, id: string): Promise<ProcessResult> {
+  const result = await readAndStore(env, id);
+  if (result !== 'skipped') await notifyWhenIdle(env.DB);
+  return result;
+}
+
+async function readAndStore(env: Cloudflare.Env, id: string): Promise<ProcessResult> {
   const db = env.DB;
   const doc = await claim(db, id);
   if (!doc) return 'skipped';

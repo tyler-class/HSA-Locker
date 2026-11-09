@@ -14,6 +14,13 @@ import type {
 
 export type Row = Record<string, unknown>;
 
+/**
+ * The documents the Review screen shows (and its tab badge counts), for `documents d`: waiting
+ * for review themselves, or holding an entry that is.
+ */
+export const REVIEW_DOC_WHERE = `(d.status = 'needs_review'
+  OR (d.status != 'discarded' AND EXISTS (SELECT 1 FROM entries re WHERE re.document_id = d.id AND re.review_reasons_json != '[]')))`;
+
 export const nowIso = () => new Date().toISOString();
 export const newId = () => crypto.randomUUID();
 

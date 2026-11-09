@@ -40,6 +40,7 @@ import {
 /** What the usage counts count, in words (matches USAGE_TABLES in the worker). */
 const USAGE_COUNTED = 'documents, entries and reimbursements';
 import { ConnectAISection } from './ConnectAI';
+import { NotificationsSection } from './NotificationsSection';
 import { buildFlags } from '@shared/kit/build';
 import { PeopleEditor } from './SettingsLists';
 import { CloudflareButton, DomainFork, NEEDS_DOMAIN } from './InboxSettings';
@@ -261,7 +262,7 @@ export function Settings() {
         )}
       </div>
 
-      <Notifications />
+      <ReminderEmail />
 
       <SectionLabel icon="users">People</SectionLabel>
       <PeopleEditor state={state} />
@@ -377,12 +378,16 @@ export function Settings() {
         </div>
       </div>
 
+      <NotificationsSection />
+
       <ConnectAISection />
 
       {/* Already installed: nothing to do here, so no section. */}
       {!isStandalone() && (
         <>
-          <SectionLabel icon="phone">Install on your phone</SectionLabel>
+          <div id="install" className="scroll-mt-14 md:scroll-mt-0">
+            <SectionLabel icon="phone">Install on your phone</SectionLabel>
+          </div>
           <div className="px-6 py-4">
             <InstallHint />
           </div>
@@ -607,7 +612,7 @@ function OwnKeyHelp() {
 }
 
 /** Settings → Daily reminder email. It sends from the inbox's domain, so it waits for the inbox. */
-function Notifications() {
+function ReminderEmail() {
   const { data: state } = useAppState();
   const { run, busy, error } = useSave();
   const [email, setEmail] = useState(state?.settings.notify_email ?? '');
@@ -620,7 +625,7 @@ function Notifications() {
   const num = 'text-ink font-medium';
   return (
     <>
-      <SectionLabel icon="bell">Daily reminder email</SectionLabel>
+      <SectionLabel icon="mail">Daily reminder email</SectionLabel>
       <div className="flex flex-col gap-2 px-6 pt-4 text-sm">
         {!ready && <p className="text-ink">{NEEDS_DOMAIN}</p>}
         <p className="text-soft">One email on days when something is waiting in Review.</p>

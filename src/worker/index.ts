@@ -10,6 +10,7 @@ import { handleAuthorize } from './consent';
 import { dueInboxMessages, handleEmail, processInboxMessage, type IncomingMessage } from './email';
 import { sweep } from './extract/pipeline';
 import { mcpApiHandler } from './mcp';
+import { runNotifications } from './notifications';
 import { sendReminder } from './notify';
 import { checkIn, checkInOnRequest, type CheckInOptions } from './kit/telemetry';
 import { buildFlags } from '../shared/kit/build';
@@ -107,7 +108,7 @@ export default {
     await handleEmail(message as unknown as IncomingMessage, env, ctx);
   },
 
-  /** The work queue: unparsed mail first, then documents due for (re)processing. */
+  /** The work queue: unparsed mail first, then documents due for (re)processing; then push. */
   async scheduled(_event: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
     // The anonymous check-in goes out at most once a day, and not at all if it's turned off.
     ctx.waitUntil(checkIn(env.DB, usage(env)));
@@ -120,5 +121,7 @@ export default {
     } catch (e) {
       console.warn(`sweeper failed: ${e instanceof Error ? e.name : 'error'}`);
     }
+    // Push: anything still unsent (documents held overnight go out on the first run after 8 a.m.).
+    ctx.waitUntil(runNotifications(env.DB));
   },
 } satisfies ExportedHandler<Cloudflare.Env>;

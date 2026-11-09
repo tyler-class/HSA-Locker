@@ -2,7 +2,7 @@
 // owner verified in Email Routing (Destination Addresses): free on every plan, no extra DNS. It
 // comes from reminders@<inbox subdomain>, which already has Email Routing.
 import { centsToDecimal } from '@shared/logic';
-import { first, getSetting, loadSettings, setSettingStmt } from './db';
+import { first, getSetting, loadSettings, REVIEW_DOC_WHERE, setSettingStmt } from './db';
 
 /** Reminders go out after this hour (UTC), once a day: 13:00 UTC is 8–9am US Eastern. */
 export const REMINDER_HOUR_UTC = 13;
@@ -88,8 +88,7 @@ export async function sendReminder(
   const counts = await first<{ docs: number; cents: number }>(
     db,
     `SELECT
-       (SELECT COUNT(*) FROM documents d WHERE d.status = 'needs_review'
-          OR (d.status != 'discarded' AND EXISTS (SELECT 1 FROM entries e WHERE e.document_id = d.id AND e.review_reasons_json != '[]'))) AS docs,
+       (SELECT COUNT(*) FROM documents d WHERE ${REVIEW_DOC_WHERE}) AS docs,
        (SELECT COALESCE(SUM(e.amount_cents), 0) FROM entries e JOIN documents d ON d.id = e.document_id
           WHERE d.status != 'discarded' AND e.type = 'receipt' AND e.review_reasons_json != '[]'
             AND e.reimbursement_id IS NULL AND e.excluded_reason IS NULL) AS cents`,

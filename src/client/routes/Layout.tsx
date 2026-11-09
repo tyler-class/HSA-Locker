@@ -3,6 +3,7 @@ import { AboutButton } from '../components/AboutSheet';
 import { DocViewer } from '../components/DocViewer';
 import { Icon, type IconName } from '../components/Icon';
 import { cx } from '../components/ui';
+import { useNotifications } from '../lib/notifications';
 import { useAppState } from '../lib/queries';
 import { useTabSwipe } from '../lib/tabSwipe';
 
@@ -49,6 +50,7 @@ export function Layout() {
   const state = useAppState();
   const review = state.data?.counts.review_documents ?? 0;
   const inFlight = state.data?.counts.in_flight ?? 0;
+  useNotifications(state.data?.counts.review_documents);
   return (
     // min-h-lvh: on a page too short to scroll, iOS home-screen apps size the viewport without the
     // safe areas and the fixed tab bar floats above the bottom. Filling the large viewport avoids it.

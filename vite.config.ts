@@ -80,6 +80,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Push notifications and the app-icon badge (Selfhost Kit: public/kit-push-sw.js).
+        importScripts: ['kit-push-sw.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // pdf.js loads on demand and only online (files are never cached), so it isn't precached.
         globIgnores: ['**/pdfjs-*.js'],
