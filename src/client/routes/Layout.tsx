@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { AboutButton } from '../components/AboutSheet';
 import { DocViewer } from '../components/DocViewer';
@@ -45,6 +46,11 @@ function Badge({ n, className }: { n: number; className?: string }) {
 
 export function Layout() {
   const { pathname } = useLocation();
+  // Every change of screen, Back included, opens at the top, never at the old scroll position.
+  useLayoutEffect(() => {
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    window.scrollTo(0, 0);
+  }, [pathname]);
   const active = activeTab(pathname);
   useTabSwipe(TAB_PATHS, tabRoot(pathname));
   const state = useAppState();
