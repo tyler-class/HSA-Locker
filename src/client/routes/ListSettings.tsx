@@ -258,9 +258,120 @@ function ProviderSheet({
             </p>
           )}
         </div>
+        {provider.aliases.length > 0 && !target && (
+          <div className="flex flex-col gap-1 border-t border-line pt-4">
+            <span className="text-xs text-soft">Other spellings</span>
+            {provider.aliases.map((a) => (
+              <SpellingRow
+                key={a}
+                alias={a}
+                count={provider.alias_entries[a] ?? 0}
+                provider={provider}
+                providers={providers}
+                onDone={onClose}
+              />
+            ))}
+          </div>
+        )}
         <ErrorText>{error}</ErrorText>
       </div>
     </Sheet>
+  );
+}
+
+/** Another spelling of a provider: remove it while unused, or move it (and its receipts) to the
+ *  provider it really belongs to. */
+function SpellingRow({
+  alias,
+  count,
+  provider,
+  providers,
+  onDone,
+}: {
+  alias: string;
+  count: number;
+  provider: ProviderUsage;
+  providers: ProviderUsage[];
+  onDone: () => void;
+}) {
+  const { run, busy, error } = useSave();
+  const [moving, setMoving] = useState(false);
+  const [into, setInto] = useState('');
+  const target = providers.find((p) => p.id === into);
+  return (
+    <div className="flex flex-col gap-2 border-b border-line py-2 last:border-b-0">
+      <div className="flex items-center gap-3">
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm text-ink">{alias}</span>
+          <span className="text-xs text-faint">{receipts(count)}</span>
+        </span>
+        {count === 0 ? (
+          <GhostButton
+            className="py-1 text-danger"
+            disabled={busy}
+            onClick={async () => {
+              if (
+                await run(
+                  () => api.post(`/providers/${provider.id}/aliases/remove`, { alias }),
+                  [PROVIDERS_KEY],
+                )
+              )
+                onDone();
+            }}
+          >
+            Remove
+          </GhostButton>
+        ) : (
+          !moving && (
+            <GhostButton className="py-1 text-accent" onClick={() => setMoving(true)}>
+              Move to…
+            </GhostButton>
+          )
+        )}
+      </div>
+      {moving && (
+        <div className="flex flex-col gap-2">
+          <Select
+            label={`Move ${alias} to`}
+            value={into}
+            onChange={(v) => setInto(v)}
+            options={[
+              ['', 'Choose the right provider…'],
+              ...providers
+                .filter((p) => p.id !== provider.id)
+                .map((p) => [p.id, p.name] as [string, string]),
+            ]}
+          />
+          {target && (
+            <p className="text-sm text-soft">
+              Its {receipts(count).toLowerCase()} move to{' '}
+              <strong className="text-ink">{target.name}</strong>.
+            </p>
+          )}
+          <div className="flex gap-2">
+            <PrimaryButton
+              className="py-1.5"
+              disabled={busy || !target}
+              onClick={async () => {
+                if (
+                  await run(
+                    () => api.post(`/providers/${provider.id}/aliases/move`, { alias, into }),
+                    [PROVIDERS_KEY],
+                  )
+                )
+                  onDone();
+              }}
+            >
+              Move
+            </PrimaryButton>
+            <GhostButton className="py-1.5" onClick={() => setMoving(false)}>
+              Cancel
+            </GhostButton>
+          </div>
+        </div>
+      )}
+      <ErrorText>{error}</ErrorText>
+    </div>
   );
 }
 
@@ -284,7 +395,13 @@ export function CategoriesSettings() {
       />
       <div className="flex flex-col px-6 pt-3">
         {categories.map((c) => (
-          <ItemRow key={c.id} name={c.name} count={c.entries} onClick={() => setOpen(c)} />
+          <ItemRow
+            key={c.id}
+            name={c.name}
+            detail={c.permanent ? 'Always kept' : undefined}
+            count={c.entries}
+            onClick={() => setOpen(c)}
+          />
         ))}
         <form
           className="flex gap-2 pt-4"
@@ -328,6 +445,20 @@ function CategorySheet({
   const { run, busy, error } = useSave();
   const target = categories.find((c) => c.id === into);
   const used = category.entries > 0;
+  if (category.permanent)
+    return (
+      <Sheet
+        open
+        onClose={onClose}
+        title={category.name}
+        sub={receipts(category.entries)}
+        footer={<PrimaryButton onClick={onClose}>Done</PrimaryButton>}
+      >
+        <p className="py-2 text-sm text-soft">
+          Always kept: the AI uses it when nothing else fits.
+        </p>
+      </Sheet>
+    );
   return (
     <Sheet
       open

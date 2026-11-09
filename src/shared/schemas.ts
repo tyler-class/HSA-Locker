@@ -22,6 +22,11 @@ export const providerInput = z.object({
 });
 export const providerPatch = providerInput.partial();
 export const providerMerge = z.object({ into: z.string().min(1) });
+export const providerAlias = z.object({ alias: z.string().trim().min(1) });
+export const providerAliasMove = z.object({
+  alias: z.string().trim().min(1),
+  into: z.string().min(1),
+});
 
 export const categoryInput = z.object({
   name: z.string().trim().min(1).max(60),

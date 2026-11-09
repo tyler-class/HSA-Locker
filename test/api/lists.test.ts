@@ -124,3 +124,53 @@ describe('domain check', () => {
     expect((await api.get('/inbox/domain-check')).status).toBe(400);
   });
 });
+
+describe('Settings → Providers: other spellings', () => {
+  it('removes an unused spelling, refuses a used one, and moves a used one with its receipts', async () => {
+    const e = await env.DB.prepare(
+      'SELECT provider_id AS pid, provider_name_raw AS raw FROM entries WHERE provider_id IS NOT NULL AND provider_name_raw IS NOT NULL LIMIT 1',
+    ).first<{ pid: string; raw: string }>();
+    const list = (await providers()).providers;
+    const from = list.find((p) => p.id === e!.pid)!;
+    const to = list.find((p) => p.id !== from.id)!;
+    await api.patch(`/providers/${from.id}`, { aliases: [e!.raw, 'Zzz Typo Clinic'] });
+
+    const counted = (await providers()).providers.find((p) => p.id === from.id)!;
+    expect(counted.alias_entries[e!.raw]).toBeGreaterThan(0);
+    expect(counted.alias_entries['Zzz Typo Clinic']).toBe(0);
+
+    const ok = await api.post(`/providers/${from.id}/aliases/remove`, { alias: 'Zzz Typo Clinic' });
+    expect(ok.status).toBe(200);
+
+    const refused = await api.post<{ error: string }>(`/providers/${from.id}/aliases/remove`, {
+      alias: e!.raw,
+    });
+    expect(refused.status).toBe(409);
+    expect(refused.data.error).toBe('in_use');
+
+    const n = counted.alias_entries[e!.raw];
+    const moved = await api.post<{ moved: number }>(`/providers/${from.id}/aliases/move`, {
+      alias: e!.raw,
+      into: to.id,
+    });
+    expect(moved.status).toBe(200);
+    expect(moved.data.moved).toBe(n);
+    const after = (await providers()).providers;
+    expect(after.find((p) => p.id === from.id)!.aliases).toEqual([]);
+    expect(after.find((p) => p.id === to.id)!.alias_entries[e!.raw]).toBe(n);
+  });
+});
+
+describe('Settings → Categories: Other', () => {
+  it('is permanent: no rename, merge or delete', async () => {
+    const list = await categories();
+    const other = list.find((c) => c.id === 'cat-other')!;
+    expect(other.permanent).toBe(true);
+    expect(list.filter((c) => c.permanent)).toHaveLength(1);
+    const target = list.find((c) => c.id !== other.id)!;
+    expect((await api.del(`/categories/${other.id}`)).status).toBe(409);
+    expect((await api.patch(`/categories/${other.id}`, { name: 'Misc' })).status).toBe(409);
+    expect((await api.post(`/categories/${other.id}/merge`, { into: target.id })).status).toBe(409);
+    expect((await categories()).some((c) => c.id === other.id && c.name === 'Other')).toBe(true);
+  });
+});

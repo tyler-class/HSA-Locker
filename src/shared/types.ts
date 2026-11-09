@@ -32,6 +32,8 @@ export interface Category {
 /** Settings → Providers: a provider and how many entries use it. */
 export interface ProviderUsage extends Provider {
   entries: number;
+  /** How many of its entries were printed with each other spelling (alias → count). */
+  alias_entries: Record<string, number>;
 }
 
 /** A printed provider name that may be an existing provider, waiting for a decision. */
@@ -45,6 +47,8 @@ export interface ProviderSuggestion {
 /** Settings → Categories: a category and how many entries use it. */
 export interface CategoryUsage extends Category {
   entries: number;
+  /** "Other", the AI's fallback: it can't be renamed, merged or deleted. */
+  permanent: boolean;
 }
 
 export interface SourceMeta {

@@ -96,7 +96,11 @@ function Field({
   wide?: boolean;
 }) {
   return (
-    <label className={wide ? 'col-span-2 flex flex-col gap-1.5' : 'flex flex-col gap-1.5'}>
+    <label
+      className={
+        wide ? 'col-span-2 flex min-w-0 flex-col gap-1.5' : 'flex min-w-0 flex-col gap-1.5'
+      }
+    >
       <span className="text-xs text-soft">{label}</span>
       {children}
     </label>

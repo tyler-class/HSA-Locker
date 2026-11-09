@@ -1,6 +1,6 @@
 // App state, settings, people, providers, categories, backup/restore, sample data, danger zone.
 import { Hono } from 'hono';
-import { applyHsaCards, matchProvider, withAlias } from '@shared/logic';
+import { applyHsaCards, matchProvider, nameKey, withAlias } from '@shared/logic';
 import { PERSON_COLORS } from '@shared/lookups';
 import {
   categoryInput,
@@ -10,6 +10,8 @@ import {
   personInput,
   personPatch,
   providerInput,
+  providerAlias,
+  providerAliasMove,
   providerMerge,
   providerPatch,
   settingsPatch,
@@ -272,11 +274,17 @@ admin.delete('/people/:id', async (c) => {
  */
 admin.get('/providers', async (c) => {
   const db = c.env.DB;
-  const [providers, counts, pending] = await Promise.all([
+  const [providers, counts, printed, pending] = await Promise.all([
     loadProviders(db),
     all<{ id: string; n: number }>(
       db,
       'SELECT provider_id AS id, COUNT(*) AS n FROM entries WHERE provider_id IS NOT NULL GROUP BY provider_id',
+    ),
+    all<{ id: string; raw: string; n: number }>(
+      db,
+      `SELECT provider_id AS id, provider_name_raw AS raw, COUNT(*) AS n FROM entries
+        WHERE provider_id IS NOT NULL AND provider_name_raw IS NOT NULL
+        GROUP BY provider_id, provider_name_raw`,
     ),
     all<{ raw: string; n: number }>(
       db,
@@ -288,7 +296,16 @@ admin.get('/providers', async (c) => {
     ),
   ]);
   const used = new Map(counts.map((r) => [r.id, Number(r.n)]));
-  const list: ProviderUsage[] = providers.map((p) => ({ ...p, entries: used.get(p.id) ?? 0 }));
+  const list: ProviderUsage[] = providers.map((p) => {
+    const alias_entries: Record<string, number> = {};
+    for (const a of p.aliases) {
+      const k = nameKey(a);
+      alias_entries[a] = printed
+        .filter((r) => r.id === p.id && nameKey(r.raw) === k)
+        .reduce((n, r) => n + Number(r.n), 0);
+    }
+    return { ...p, entries: used.get(p.id) ?? 0, alias_entries };
+  });
   const suggestions: ProviderSuggestion[] = pending.map((r) => {
     const m = matchProvider(r.raw, providers);
     return { raw: r.raw, entries: Number(r.n), suggested_id: m.kind === 'none' ? null : m.id };
@@ -394,6 +411,79 @@ admin.post('/providers/:id/alias', async (c) => {
   });
 });
 
+/** Entries of a provider that were printed with this spelling. */
+async function aliasEntries(db: D1Database, providerId: string, alias: string) {
+  const k = nameKey(alias);
+  return (
+    await all<{ id: string; raw: string; document_id: string }>(
+      db,
+      'SELECT id, provider_name_raw AS raw, document_id FROM entries WHERE provider_id = ? AND provider_name_raw IS NOT NULL',
+      providerId,
+    )
+  ).filter((e) => nameKey(e.raw) === k);
+}
+
+/** Removes a wrong spelling. Only while no receipt was printed with it; otherwise move it. */
+admin.post('/providers/:id/aliases/remove', async (c) => {
+  const db = c.env.DB;
+  const { alias } = await body(c, providerAlias);
+  const row = await first(db, 'SELECT * FROM providers WHERE id = ?', c.req.param('id'));
+  if (!row) throw notFound('Provider');
+  const p = toProvider(row);
+  const k = nameKey(alias);
+  if (!p.aliases.some((a) => nameKey(a) === k)) throw notFound('Spelling');
+  const n = (await aliasEntries(db, p.id, alias)).length;
+  if (n > 0)
+    throw new ApiError(
+      409,
+      'in_use',
+      `${n} receipt${n === 1 ? ' uses' : 's use'} this spelling. Move it to the right provider instead.`,
+    );
+  await updateStmt(db, 'providers', p.id, {
+    aliases_json: JSON.stringify(p.aliases.filter((a) => nameKey(a) !== k)),
+  }).run();
+  return c.json(toProvider((await first(db, 'SELECT * FROM providers WHERE id = ?', p.id))!));
+});
+
+/** Moves a spelling, and the receipts printed with it, to the provider it really belongs to. */
+admin.post('/providers/:id/aliases/move', async (c) => {
+  const db = c.env.DB;
+  const { alias, into } = await body(c, providerAliasMove);
+  const fromId = c.req.param('id');
+  if (fromId === into) throw new ApiError(400, 'invalid', 'Pick a different provider.');
+  const [from, to] = await Promise.all([
+    first(db, 'SELECT * FROM providers WHERE id = ?', fromId),
+    first(db, 'SELECT * FROM providers WHERE id = ?', into),
+  ]);
+  if (!from || !to) throw notFound('Provider');
+  const f = toProvider(from);
+  const t = toProvider(to);
+  const k = nameKey(alias);
+  const spelled = f.aliases.find((a) => nameKey(a) === k);
+  if (!spelled) throw notFound('Spelling');
+  const moving = await aliasEntries(db, f.id, spelled);
+  const now = nowIso();
+  await db.batch([
+    updateStmt(db, 'providers', f.id, {
+      aliases_json: JSON.stringify(f.aliases.filter((a) => nameKey(a) !== k)),
+    }),
+    updateStmt(db, 'providers', t.id, {
+      aliases_json: JSON.stringify(withAlias(t.name, t.aliases, spelled)),
+    }),
+    ...moving.map((e) =>
+      db
+        .prepare('UPDATE entries SET provider_id = ?, updated_at = ? WHERE id = ?')
+        .bind(t.id, now, e.id),
+    ),
+  ]);
+  if (moving.length)
+    await refreshDocs(
+      db,
+      moving.map((e) => e.document_id),
+    );
+  return c.json({ moved: moving.length });
+});
+
 // Providers aren't deleted: extraction would only recreate them. Merge or rename instead.
 
 // ---------- categories ----------
@@ -419,7 +509,15 @@ admin.post('/categories', async (c) => {
   return c.json({ id, name: input.name, sort_order: input.sort_order ?? max + 1 }, 201);
 });
 
+/** "Other" is the AI's fallback, so it always exists, under that name. */
+const OTHER_CATEGORY = 'cat-other';
+function keepOther(id: string) {
+  if (id === OTHER_CATEGORY)
+    throw new ApiError(409, 'permanent', 'Other is always kept: the AI uses it as a fallback.');
+}
+
 admin.patch('/categories/:id', async (c) => {
+  keepOther(c.req.param('id'));
   const input = await body(c, categoryPatch);
   const db = c.env.DB;
   const id = c.req.param('id');
@@ -453,7 +551,11 @@ admin.get('/categories', async (c) => {
     ),
   ]);
   const used = new Map(counts.map((r) => [r.id, Number(r.n)]));
-  const list: CategoryUsage[] = categories.map((x) => ({ ...x, entries: used.get(x.id) ?? 0 }));
+  const list: CategoryUsage[] = categories.map((x) => ({
+    ...x,
+    entries: used.get(x.id) ?? 0,
+    permanent: x.id === OTHER_CATEGORY,
+  }));
   return c.json({ categories: list });
 });
 
@@ -462,6 +564,7 @@ admin.post('/categories/:id/merge', async (c) => {
   const db = c.env.DB;
   const { into } = await body(c, categoryMerge);
   const fromId = c.req.param('id');
+  keepOther(fromId);
   if (fromId === into) throw new ApiError(400, 'invalid', 'Pick a different category.');
   const [from, to] = await Promise.all([
     first(db, 'SELECT 1 FROM categories WHERE id = ?', fromId),
@@ -481,6 +584,7 @@ admin.post('/categories/:id/merge', async (c) => {
 admin.delete('/categories/:id', async (c) => {
   const db = c.env.DB;
   const id = c.req.param('id');
+  keepOther(id);
   const n =
     (await first<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM entries WHERE category_id = ?', id))
       ?.n ?? 0;
