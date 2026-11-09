@@ -51,13 +51,13 @@ export function Layout() {
   return (
     // min-h-lvh: on a page too short to scroll, iOS home-screen apps size the viewport without the
     // safe areas and the fixed tab bar floats above the bottom. Filling the large viewport avoids it.
-    <div className="min-h-full min-h-lvh pt-[calc(env(safe-area-inset-top,0px)+8px)] md:pl-60 md:pt-safe">
-      {/* A solid strip under the status bar: iOS blurs whatever scrolls beneath it in installed
-          apps, so the page scrolls under a plain bar instead (0 tall in a browser tab). */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-x-0 top-0 z-20 h-[env(safe-area-inset-top,0px)] bg-bg"
-      />
+    <div className="min-h-full min-h-lvh md:pl-60 md:pt-safe">
+      {/* Phones: a solid app bar at the top, like Nitrogen's. iOS blurs whatever scrolls under
+          the status bar (and a little below it) in installed apps; over a plain bar it's invisible. */}
+      <header className="sticky top-0 z-20 mb-2 flex h-[calc(env(safe-area-inset-top,0px)+48px)] items-center justify-center gap-2 border-b border-line bg-bg pt-[env(safe-area-inset-top,0px)] md:hidden">
+        <img src="/favicon.svg" alt="" className="h-7 w-7 rounded-lg" />
+        <span className="text-[17px] font-semibold">HSA Locker</span>
+      </header>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-chip px-3 pt-[calc(20px+env(safe-area-inset-top,0px))] pb-5 md:flex">
         <div className="flex items-center gap-2.5 px-3 pb-6">
           <img src="/favicon.svg" alt="" className="h-8 w-8 rounded-lg" />
