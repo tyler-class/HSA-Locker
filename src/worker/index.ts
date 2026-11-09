@@ -11,7 +11,7 @@ import { dueInboxMessages, handleEmail, processInboxMessage, type IncomingMessag
 import { sweep } from './extract/pipeline';
 import { mcpApiHandler } from './mcp';
 import { sendReminder } from './notify';
-import { checkIn } from './kit/telemetry';
+import { checkIn, checkInOnRequest, type CheckInOptions } from './kit/telemetry';
 import { buildFlags } from '../shared/kit/build';
 import pkg from '../../package.json';
 
@@ -72,8 +72,19 @@ function oauthCapable(url: URL): boolean {
   return url.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
 }
 
+/** The anonymous daily check-in's settings (counts only; see src/worker/kit/telemetry.ts). */
+const usage = (env: Cloudflare.Env): CheckInOptions => ({
+  app: 'hsa-locker',
+  version: pkg.version,
+  tables: USAGE_TABLES,
+  buckets: [env.FILES],
+  build: buildFlags(),
+});
+
 export default {
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext) {
+    // Check in the first time the app is opened each day (no cost after that).
+    checkInOnRequest(ctx, request, env.DB, usage(env));
     const url = new URL(request.url);
     if (!oauthCapable(url)) {
       if (
@@ -99,15 +110,7 @@ export default {
   /** The work queue: unparsed mail first, then documents due for (re)processing. */
   async scheduled(_event: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
     // The anonymous check-in goes out at most once a day, and not at all if it's turned off.
-    ctx.waitUntil(
-      checkIn(env.DB, {
-        app: 'hsa-locker',
-        version: pkg.version,
-        tables: USAGE_TABLES,
-        buckets: [env.FILES],
-        build: buildFlags(),
-      }),
-    );
+    ctx.waitUntil(checkIn(env.DB, usage(env)));
     try {
       for (const id of await dueInboxMessages(env.DB, 5)) await processInboxMessage(env, id);
       const n = await sweep(env, 5);
