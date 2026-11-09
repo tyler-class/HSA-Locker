@@ -11,6 +11,7 @@ import {
   PageHeader,
   PrimaryButton,
   SectionLabel,
+  SlideToggle,
   SubHeading,
   Switch,
   TextInput,
@@ -603,21 +604,17 @@ function ForwardingHelp({ address }: { address: string }) {
             Only for senders that send nothing but receipts. Never forward all mail from your
             insurer or doctor: statements and messages would end up in Review.
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            {(['gmail', 'outlook', 'fastmail', 'apple'] as const).map((k) => (
-              <button
-                key={k}
-                onClick={() => setTab(k)}
-                aria-pressed={tab === k}
-                className={cx(
-                  'rounded-full px-3 py-1 text-sm',
-                  tab === k ? 'bg-accent-tint font-medium text-accent' : 'bg-chip text-soft',
-                )}
-              >
-                {{ gmail: 'Gmail', outlook: 'Outlook', fastmail: 'Fastmail', apple: 'iCloud' }[k]}
-              </button>
-            ))}
-          </div>
+          <SlideToggle<typeof tab>
+            label="Email provider"
+            value={tab}
+            onChange={setTab}
+            options={[
+              ['gmail', 'Gmail'],
+              ['outlook', 'Outlook'],
+              ['fastmail', 'Fastmail'],
+              ['apple', 'iCloud'],
+            ]}
+          />
           <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-ink">
             {steps[tab].map((s) => (
               <li key={s}>{s}</li>

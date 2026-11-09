@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -771,43 +772,81 @@ export function SubHeading({ children }: { children: ReactNode }) {
   return <h3 className="px-6 pt-5 pb-2 text-sm font-semibold text-ink">{children}</h3>;
 }
 
-/** A pill switch with a sliding thumb (2–4 options). */
-export function SlideToggle<T extends string>({
-  value,
-  options,
-  onChange,
-  label,
-  className,
-}: {
-  value: T;
+type SlideToggleProps<T extends string> = {
   options: [T, ReactNode][];
-  onChange: (v: T) => void;
   label: string;
   className?: string;
-}) {
-  const index = Math.max(
-    0,
-    options.findIndex(([v]) => v === value),
-  );
+} & (
+  | { value: T | null | undefined; onChange: (v: T) => void; allowClear?: false }
+  /** Tapping the chosen option again clears it; no thumb shows while nothing is chosen. */
+  | { value: T | null | undefined; onChange: (v: T | null) => void; allowClear: true }
+);
+
+/**
+ * A pill switch with a sliding thumb. Options share the width equally; one whose label
+ * needs more room grows to fit it, and when they can't all fit the switch scrolls sideways.
+ * The thumb is measured from the chosen option, so it always sits right behind it.
+ */
+export function SlideToggle<T extends string>(props: SlideToggleProps<T>) {
+  const { options, label, className } = props;
+  const index = options.findIndex(([v]) => v === props.value);
   const n = options.length;
+  const track = useRef<HTMLDivElement>(null);
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = track.current;
+    if (!el) return;
+    const measure = () => {
+      const b = index >= 0 ? el.querySelectorAll<HTMLElement>(':scope > button')[index] : undefined;
+      setThumb((t) =>
+        !b
+          ? null
+          : t && t.left === b.offsetLeft && t.width === b.offsetWidth
+            ? t
+            : { left: b.offsetLeft, width: b.offsetWidth },
+      );
+      // Keep the chosen option in view when the switch scrolls.
+      if (b && el.scrollWidth > el.clientWidth) {
+        if (b.offsetLeft < el.scrollLeft) el.scrollLeft = b.offsetLeft - 4;
+        else if (b.offsetLeft + b.offsetWidth > el.scrollLeft + el.clientWidth)
+          el.scrollLeft = b.offsetLeft + b.offsetWidth - el.clientWidth + 4;
+      }
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    for (const c of el.querySelectorAll(':scope > button')) ro.observe(c);
+    return () => ro.disconnect();
+  }, [index, n]);
+  const pick = (v: T) => {
+    if (props.allowClear) props.onChange(v === props.value ? null : v);
+    else props.onChange(v);
+  };
   return (
     <div
+      ref={track}
       role="tablist"
       aria-label={label}
-      className={cx('relative grid rounded-full bg-chip p-1', className)}
-      style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+      className={cx(
+        'no-scrollbar relative grid overflow-x-auto rounded-full bg-chip p-1',
+        className,
+      )}
+      style={{ gridTemplateColumns: `repeat(${n}, minmax(max-content, 1fr))` }}
     >
-      <span
-        aria-hidden="true"
-        className="absolute inset-y-1 left-1 rounded-full bg-surface shadow-[0_1px_3px_rgba(0,0,0,.12)] transition-transform duration-200 ease-out"
-        style={{ width: `calc((100% - 0.5rem) / ${n})`, transform: `translateX(${index * 100}%)` }}
-      />
+      {thumb && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-1 left-0 rounded-full bg-surface shadow-[0_1px_3px_rgba(0,0,0,.12)] transition-[transform,width] duration-200 ease-out"
+          style={{ width: thumb.width, transform: `translateX(${thumb.left}px)` }}
+        />
+      )}
       {options.map(([v, text], i) => (
         <button
           key={v}
+          type="button"
           role="tab"
           aria-selected={i === index}
-          onClick={() => onChange(v)}
+          onClick={() => pick(v)}
           className={cx(
             'relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm whitespace-nowrap transition-colors',
             i === index ? 'font-semibold text-accent' : 'text-soft',

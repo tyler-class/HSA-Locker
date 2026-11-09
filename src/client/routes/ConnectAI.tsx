@@ -2,7 +2,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, errorMessage } from '../lib/api';
 import { Icon } from '../components/Icon';
-import { cx, ErrorText, GhostButton, Pick, SectionLabel, SubHeading } from '../components/ui';
+import {
+  cx,
+  ErrorText,
+  GhostButton,
+  SectionLabel,
+  SlideToggle,
+  SubHeading,
+} from '../components/ui';
 import { assistants, ASSISTANT_INTRO, CONNECTED_TEXT, signInNote } from '../kit/assistants';
 import { useToast } from '../components/Toast';
 import { EXAMPLE_PROMPTS } from '@shared/examples';
@@ -93,17 +100,13 @@ export function ConnectAISection() {
 
       <SubHeading>{CONNECTED_TEXT.setUp}</SubHeading>
       <div className="flex flex-col gap-3 px-6 text-sm">
-        <div className="flex flex-wrap gap-1.5">
-          {list.map((a) => (
-            <Pick
-              key={a.id}
-              on={open === a.id}
-              onClick={() => setOpen(open === a.id ? null : a.id)}
-            >
-              {a.name}
-            </Pick>
-          ))}
-        </div>
+        <SlideToggle
+          label="AI assistant"
+          value={open}
+          allowClear
+          onChange={setOpen}
+          options={list.map((a) => [a.id, a.name])}
+        />
         {shown && (
           <div className="flex flex-col gap-2 text-ink">
             {shown.steps.length > 0 && (
