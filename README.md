@@ -4,6 +4,8 @@ Keep every medical receipt and EOB for your HSA in one place, and always know ho
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/HSA-Locker)
 
+<!-- 📸 SCREENSHOT docs/screenshots/hero.png: HSA Locker on a phone: Home with outstanding, reimbursed and documented totals (sample household) -->
+
 - **Every original, kept.** PDFs, photos and the emails they came in are stored privately in your own Cloudflare R2 bucket and open only through the app.
 - **Read for you.** Each document is read by an AI model (Workers AI by default, inside your Cloudflare account) into dates, patient, provider, amount and card. Receipts become one entry; EOBs become one line per service.
 - **Checked, not guessed.** An amount that isn’t printed in the document, an unknown patient, a likely duplicate or a date in the future goes to **Review** instead of into your totals.
@@ -14,42 +16,135 @@ Keep every medical receipt and EOB for your HSA in one place, and always know ho
 - **People and providers.** “Olivia”, “Olivia Class” and “Class, Olivia” are one person; “Grand Rapids Surgical Suit” on an EOB can be the same provider as on the receipt.
 - **Exports.** A CSV of the ledger (any filter), a JSON backup, and a ZIP of every original named by date, person, provider and amount: an audit packet.
 - **AI assistants.** Connect Claude, ChatGPT or any MCP-capable assistant to ask what’s outstanding or record a reimbursement.
-- **Yours.** It runs on your own Cloudflare account. No analytics, no third-party scripts.
+- **Yours.** It runs on your own Cloudflare account. No third-party scripts. The only thing it sends out is an anonymous daily count you can switch off, and nothing from your receipts or documents is ever in it.
 
 One deployment is one household. HSA Locker isn’t tax advice and makes no HIPAA compliance claims.
 
-## Deploy
+## Before you install
 
-### One click
-
-1. Click **Deploy to Cloudflare** above and sign in to Cloudflare.
-2. Cloudflare copies this repo to your GitHub or GitLab account, creates the database, file storage and AI binding, and asks for **APP_PASSWORD**: the password everyone in your household signs in with. Pick something long.
-3. When the deploy finishes, open the `*.workers.dev` link and sign in.
-
-**Before you click:**
-
-- **R2 needs to be enabled on your account.** File storage uses Cloudflare R2. Its free tier (10 GB) is plenty, but Cloudflare asks you to add R2 to your account (Dashboard → R2) with a payment method on file before a bucket can be created. Do that first or the deploy can’t create the bucket.
+- **Enable R2 on your Cloudflare account.** File storage uses Cloudflare R2. Its free tier (10 GB) is plenty, but Cloudflare asks you to add R2 to your account (**Dashboard → R2**) with a payment method on file before a bucket can be created. Do that first, or the deploy can’t create the bucket.
 - **Workers Paid ($5/month) is recommended if you’ll forward email or upload photos.** The free plan gives each request 10 ms of CPU. Reading text PDFs fits; parsing larger emails and preparing photos for the AI model often doesn’t. Uploading PDFs works on the free plan.
 
-Cloudflare runs the database migrations on every deploy (`npm run deploy`), before the new version goes live.
+<!-- 📸 SCREENSHOT docs/screenshots/r2-enable.png: Cloudflare's R2 page with the button to add R2 to the account -->
 
-### By hand
+<!-- kit:readme:start -->
+<!-- Written by the Selfhost Kit (kit/docs/readme-install.md): edit it there. -->
 
-```sh
-git clone https://github.com/tyler-class/HSA-Locker.git && cd HSA-Locker
-npm install
-npx wrangler login
-npx wrangler secret put APP_PASSWORD
-npm run deploy
-```
+## Install
 
-`npm run deploy` builds the app, applies migrations to the remote database and deploys the Worker. Wrangler creates the D1 database, R2 bucket and KV namespace on the first deploy.
+You need two free accounts, and about five minutes.
+
+### 1. Have a Cloudflare account
+
+HSA Locker runs on your own Cloudflare account. The free plan is plenty. If you don't have one, [sign up](https://dash.cloudflare.com/sign-up) and confirm your email.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-1-cloudflare-signup.png: Cloudflare's sign-up page -->
+
+### 2. Have a GitHub account
+
+The Deploy button makes your own copy of HSA Locker's code in your GitHub account, so you can keep it updated. If you don't have one, [sign up](https://github.com/signup).
+
+### 3. Let Cloudflare use your GitHub
+
+Cloudflare needs its **Cloudflare Workers and Pages** app installed on your GitHub account to create your copy and deploy it.
+
+1. Open [github.com/apps/cloudflare-workers-and-pages](https://github.com/apps/cloudflare-workers-and-pages) and click **Install** (or **Configure** if it's already installed).
+2. Choose your account.
+3. Pick **All repositories**. That's simplest, because the Deploy button creates a new one. If you'd rather limit it, choose **Only select repositories** and come back to add your HSA Locker copy after step 4.
+4. Click **Install**.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-3-github-app.png: GitHub's install page for Cloudflare Workers and Pages, with All repositories selected -->
+
+You can also do this in the middle of the next step: Cloudflare asks you to connect GitHub if you haven't.
+
+### 4. Click Deploy
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/HSA-Locker)
+
+Sign in to Cloudflare if it asks. You land on a setup page.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-4-deploy-page.png: Cloudflare's "Create an application" page for HSA Locker -->
+
+### 5. Check the names (most people keep the defaults)
+
+- **Git account**: your GitHub account.
+- **Repository name**: what your copy is called on GitHub. Leave **Create private Git repository** ticked to keep it private.
+- **Project name**: the Worker's name, which is also in your address: `https://hsa-locker.<your-subdomain>.workers.dev`.
+- **Database and storage names**: what Cloudflare calls the storage it creates for you. Keep them.
+
+### 6. Set your password
+
+Under **Variables and secrets**, fill in **APP_PASSWORD**: the one password everyone in your household uses to sign in. Pick something long. You can change it later (see [Change your password](#change-your-password)), but set it now.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-6-password.png: The APP_PASSWORD field on the setup page -->
+
+### 7. Create and deploy
+
+Click **Create and deploy**. Cloudflare copies the code to your GitHub, creates the storage and builds HSA Locker. It takes a minute or two. When the build log finishes, your address is at the end of it, and on the Worker's page under **Domains**.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-7-build-done.png: A finished build log with the workers.dev address at the end -->
+
+Open it, sign in with your password, and you're done. Bookmark it, or add it to your phone's home screen.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-7-signed-in.png: HSA Locker right after signing in -->
+
+### 8. Set up automatic updates (recommended)
+
+Your copy updates itself every Monday once you allow it. That takes one click, once:
+
+1. In HSA Locker, open **Settings → Updates** and choose **Set up automatic updates**.
+2. GitHub opens with the update file filled in. Click **Commit changes**.
+
+That brings in the latest HSA Locker straight away, then every week. See [Updates](#updates) for how it works.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-8-updates.png: Settings → Updates with the Set up automatic updates button -->
+<!-- 📸 SCREENSHOT docs/screenshots/install-8-commit.png: GitHub's new-file page with the update file filled in, and the Commit changes button -->
+
+## Updates
+
+Updates take two steps, both in your own accounts. HSA Locker never deploys to your Cloudflare directly.
+
+1. **HSA Locker → your GitHub copy.** The update workflow you added in step 8 brings in the latest code every Monday. To update now, open **Settings → Updates → Update now** and click **Run workflow** on GitHub. Settings also tells you when a newer version is out.
+2. **Your GitHub copy → your Cloudflare.** Cloudflare builds and deploys every change to your copy, migrating the database first. This was switched on in step 7.
+
+Your data lives in the database and file storage, not here, so it isn't touched. An update replaces the code in your copy, so changes you made to it are overwritten. Your copy's own name and storage settings are kept.
+
+Deployed by hand instead? `git pull`, then `npm run deploy`.
+
+## Change your password
+
+1. In Cloudflare, open **Compute → Workers & Pages** and choose **hsa-locker**.
+2. Open the **Settings** tab. Under **Variables and Secrets**, find **APP_PASSWORD** (type **Secret**) and click its pencil icon.
+3. Type the new password and save. You can't see the current one, only set a new one.
+
+Everyone is signed out and signs in again with the new password.
+
+<!-- 📸 SCREENSHOT docs/screenshots/password-1-secrets.png: The Variables and Secrets list with APP_PASSWORD and its pencil icon -->
+
+## Use your own domain (advanced)
+
+Your address starts as `https://hsa-locker.<your-subdomain>.workers.dev`. Two ways to change it:
+
+- **Rename your workers.dev subdomain.** In Cloudflare, open **Compute → Workers & Pages**. Your subdomain is shown on the right, with **Change**. It applies to every Worker in your account, so all your apps move together.
+- **Give HSA Locker its own address on a domain you own**, like `hsa-locker.example.com`. The domain has to be on Cloudflare. Open the Worker, go to **Settings → Domains & Routes → Add → Custom domain**, and enter the address. Cloudflare sets up DNS and the certificate. Repeat for each app to give each one its own subdomain.
+
+<!-- 📸 SCREENSHOT docs/screenshots/domain-1-custom-domain.png: Settings → Domains & Routes → Add → Custom domain -->
+
+If you connected an AI assistant, connect it again with the new address.
+
+## Anonymous usage counts
+
+Once a day your copy tells HSA Locker's developer that it exists: a random id it made for itself, its version, how many documents, entries and reimbursements it has (counts only), how many files it stores, and whether automatic updates are on. Never names, contents or anything you type, and no IP address is kept. It shows how many copies are in use. Turn it off in **Settings → Updates → Share anonymous usage counts**.
+
+<!-- kit:readme:end -->
 
 ## Forward receipts by email
 
 Inbound email needs a domain on your Cloudflare account. Use a **new subdomain** (for example `hsa-in.example.com`) so your normal email isn’t touched. In the app, open **Settings → Inbox** and follow the steps; the details, and what to do without a domain, are in [docs/email-setup.md](docs/email-setup.md).
 
 No domain? Everything else works with uploads.
+
+<!-- 📸 SCREENSHOT docs/screenshots/inbox-setup.png: Settings → Inbox with the steps for the forwarding address -->
 
 ## Choose the AI model
 
@@ -76,7 +171,7 @@ Upload has a **Take photo** button for paper receipts.
 
 ## Connect an AI assistant
 
-HSA Locker includes an [MCP](https://modelcontextprotocol.io) server at `https://<your-hsa-locker>/mcp`. Open **Settings → Connect an AI assistant** to copy your URL and see steps for Claude, ChatGPT, Claude Code and others. When an assistant connects, HSA Locker shows a sign-in page; enter your household password to approve it. Assistants can read your ledger and totals and record reimbursements; they can’t open the documents.
+HSA Locker includes an [MCP](https://modelcontextprotocol.io) server at `https://<your-hsa-locker>/mcp`. Open **Settings → Connect an AI assistant** to copy your URL and see steps for Claude, ChatGPT, Claude Code and others. When an assistant connects, HSA Locker shows a sign-in page; enter your household password to approve it. Assistants can read your ledger and totals and record reimbursements; they can’t open the documents. Changing the password doesn’t disconnect them; use **Disconnect all** in the same place.
 
 Not sure what to ask? Ask the assistant “what can you do with HSA Locker?”: it calls `get_started`, which returns your current totals and open items with example requests that fit. Some to try:
 
@@ -86,10 +181,6 @@ Not sure what to ask? Ask the assistant “what can you do with HSA Locker?”: 
 - “What did we spend on \<person>’s care in \<year>, by category and provider?”
 
 Settings → Connect an AI assistant lists more under **Try asking** (tap one to copy it). The server also offers ready-made prompts, which Claude shows in its **+** menu: **Record a reimbursement**, **Work through Review**, **Year in review** and **Check HSA card receipts**. Each one shows you the list and the total and asks before changing anything. The examples live in `src/shared/examples.ts`; the server instructions, `get_started` and the Settings list all read from it.
-
-## Change the password
-
-Set a new `APP_PASSWORD` in the Cloudflare dashboard under **Workers & Pages → hsa-locker → Settings → Variables and Secrets**, or with `npx wrangler secret put APP_PASSWORD`. Everyone is signed out. Connected AI assistants keep working until you disconnect them.
 
 ## Back up and restore
 
@@ -103,24 +194,21 @@ Set a new `APP_PASSWORD` in the Cloudflare dashboard under **Workers & Pages →
 
 `npm run import:hsa-wizard` imports the old sheet and its Drive folder, collapsing duplicate rows and name variants. See [docs/importing-from-hsa-wizard.md](docs/importing-from-hsa-wizard.md).
 
-## Update your copy
+## Deploy by hand
 
-Updates come in two steps, both in your own accounts: HSA Locker’s latest code goes into **your GitHub copy**, and Cloudflare deploys **your copy** whenever it changes. HSA Locker never deploys to your Cloudflare account directly.
+If you’d rather not use the button, or want to work on the code:
 
-- **Your copy → your Cloudflare** is already on. The Deploy button set Cloudflare to build and deploy every change to your copy’s `main` branch (migrating the database first).
-- **HSA Locker → your copy** needs one click to turn on. The Deploy button doesn’t copy GitHub workflow files, so open **Settings → Updates** and choose **Set up automatic updates**. GitHub opens with the update workflow filled in; click **Commit changes**. That brings in the latest HSA Locker straight away, then every Monday.
+```sh
+git clone https://github.com/tyler-class/HSA-Locker.git && cd HSA-Locker
+npm install
+npx wrangler login
+npx wrangler secret put APP_PASSWORD
+npm run deploy
+```
 
-To update before Monday, choose **Update now** in Settings and click **Run workflow** on GitHub. Settings also shows when a newer HSA Locker is out.
-
-Your data is in the database and R2, not the repo, so updates don’t touch it. An update replaces the app’s code, so changes you made to your copy’s code are overwritten. Two things are kept: your `.github/workflows` (GitHub doesn’t let a workflow change them, so if HSA Locker’s change, copy them over by hand) and a `wrangler.jsonc` that has your database id in it.
-
-If you deployed by hand, `git pull` and `npm run deploy`.
+`npm run deploy` builds the app, applies migrations to the remote database and deploys the Worker. Wrangler creates the D1 database, R2 bucket and KV namespace on the first deploy.
 
 How the button, Workers Builds and the update workflow fit together: [docs/deploy-and-updates.md](docs/deploy-and-updates.md).
-
-## Anonymous usage counts
-
-Once a day your copy tells HSA Locker’s developer that it exists: a random id it made for itself, its version, how many rows each table has (documents, receipts, people, …), how many files it stores (one number) and whether automatic updates are on. Nothing from your receipts or documents is ever sent: no names, amounts, providers, file names or contents, and no IP address is kept. It shows how many copies are in use. Turn it off in **Settings → Updates → Share anonymous usage counts**.
 
 ## Local development
 

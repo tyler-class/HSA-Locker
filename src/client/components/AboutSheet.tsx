@@ -1,16 +1,21 @@
 import { useState } from 'react';
-import { checkForUpdate } from '../lib/pwa';
-import { useToast } from './Toast';
+import { aboutLinks, BUILT_BY, type AboutLinkKind } from '../kit/about';
 import { Icon, type IconName } from './Icon';
 import { cx, Sheet } from './ui';
 
-const LINKS: [string, string, IconName][] = [
-  ['https://github.com/tyler-class/HSA-Locker', 'HSA Locker on GitHub', 'github'],
-  ['https://ko-fi.com/tylerclass', 'HSA Locker is free. Coffee is my love language ☕', 'coffee'],
-  ['https://tylerclass.net', 'tylerclass.net', 'link'],
-];
+const LINKS = aboutLinks({
+  title: 'HSA Locker',
+  repo: 'tyler-class/HSA-Locker',
+  email: 'hsalocker@tylerclass.net',
+});
+const ICONS: Record<AboutLinkKind, IconName> = {
+  github: 'github',
+  email: 'mail',
+  coffee: 'coffee',
+  site: 'link',
+};
 
-/** About HSA Locker: version, what it is, who built it, and links. */
+/** About HSA Locker: version, what it is, who built it, and links (Selfhost Kit layout). */
 export function AboutSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
     <Sheet
@@ -24,22 +29,20 @@ export function AboutSheet({ open, onClose }: { open: boolean; onClose: () => vo
         <p className="text-base text-ink">
           HSA Locker keeps every medical receipt and EOB in one place and shows what you can still
           reimburse from your HSA. It runs on your own Cloudflare account, so your records stay
-          yours.
+          yours. Not tax or medical advice.
         </p>
-        <p className="text-sm text-soft">Built by Tyler Class. Not tax or medical advice.</p>
+        <p className="text-sm text-soft">{BUILT_BY}</p>
       </div>
-      <CheckForUpdates />
       <div className="pt-3 pb-2">
-        {LINKS.map(([href, label, icon]) => (
+        {LINKS.map((l) => (
           <a
-            key={href}
-            href={href}
-            target="_blank"
-            rel="noreferrer"
-            className="flex w-full items-center gap-3 border-t border-line py-3.5 text-base text-ink"
+            key={l.href}
+            href={l.href}
+            {...(l.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+            className="group flex w-full items-center gap-3 border-t border-line py-3.5 text-base text-ink"
           >
-            <Icon name={icon} size={18} className="flex-none text-accent" />
-            <span className="flex-1">{label}</span>
+            <Icon name={ICONS[l.kind]} size={18} className="flex-none text-accent" />
+            <span className="flex-1 underline-offset-4 group-hover:underline">{l.label}</span>
             <Icon name="chevRight" size={16} className="flex-none text-faint" />
           </a>
         ))}
@@ -73,32 +76,5 @@ export function AboutButton({
       </button>
       <AboutSheet open={open} onClose={() => setOpen(false)} />
     </>
-  );
-}
-
-/** Reloads into a newer deploy if there is one (the installed app on iOS needs this most). */
-function CheckForUpdates() {
-  const toast = useToast();
-  const [checking, setChecking] = useState(false);
-  return (
-    <button
-      type="button"
-      disabled={checking}
-      onClick={async () => {
-        setChecking(true);
-        try {
-          if ((await checkForUpdate()) === 'latest')
-            toast({ text: 'You’re on the latest version.' });
-        } catch {
-          toast({ text: 'Couldn’t check. Are you online?' });
-        } finally {
-          setChecking(false);
-        }
-      }}
-      className="mt-3 inline-flex items-center gap-1.5 self-start rounded-full bg-chip px-3.5 py-2 text-sm text-ink disabled:opacity-60"
-    >
-      <Icon name="refresh" size={15} />
-      {checking ? 'Checking…' : 'Check for updates'}
-    </button>
   );
 }
