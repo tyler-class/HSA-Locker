@@ -7,7 +7,7 @@ const LINKS = aboutLinks({
   title: 'HSA Locker',
   repo: 'tyler-class/HSA-Locker',
   email: 'hsalocker@tylerclass.net',
-  coffee: 'HSA Locker: $0 deductible. Buy me a coffee ☕',
+  coffee: '$0 deductible. Buy me a coffee ☕',
 });
 const ICONS: Record<AboutLinkKind, IconName> = {
   github: 'github',
