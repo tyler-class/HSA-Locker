@@ -6,9 +6,9 @@ import type { ReactNode } from 'react';
 import { cx } from './ui';
 
 const STATUS: Record<EntryStatus, [string, string]> = {
-  outstanding: ['Outstanding', 'bg-accent-tint text-accent'],
+  outstanding: ['Reimbursable', 'bg-accent-tint text-accent'],
   reimbursed: ['Reimbursed', 'bg-chip text-ok'],
-  excluded: ['Excluded', 'bg-chip text-faint'],
+  excluded: ['Not claimable', 'bg-chip text-faint'],
   needs_review: ['Needs review', 'bg-warn-tint text-warn'],
   eob: ['EOB', 'bg-chip text-soft'],
 };
@@ -35,10 +35,11 @@ export function StatusChip({ entry }: { entry: Parameters<typeof entryStatus>[0]
 export function ReasonChips({ reasons }: { reasons: string[] }) {
   if (!reasons.length) return null;
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex min-w-0 flex-wrap gap-1.5">
       {reasons.map((r) => (
-        <Chip key={r} className="bg-warn-tint text-warn">
-          {reviewLabel(r)}
+        // A long reason shortens with "…" instead of running under the status chip.
+        <Chip key={r} className="max-w-full bg-warn-tint text-warn">
+          <span className="min-w-0 truncate">{reviewLabel(r)}</span>
         </Chip>
       ))}
     </div>

@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { AboutButton } from '../components/AboutSheet';
+import { DocViewer } from '../components/DocViewer';
 import { Icon, type IconName } from '../components/Icon';
 import { cx } from '../components/ui';
 import { useAppState } from '../lib/queries';
@@ -116,6 +117,8 @@ export function Layout() {
         )}
         <Outlet />
       </main>
+
+      <DocViewer />
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 pb-safe backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-2xl grid-cols-4 pt-2 pb-2">

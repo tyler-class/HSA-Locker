@@ -4,18 +4,18 @@ Keep every medical receipt and EOB for your HSA in one place, and always know ho
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/HSA-Locker)
 
-<!-- 📸 SCREENSHOT docs/screenshots/hero.png: HSA Locker on a phone: Home with outstanding, reimbursed and documented totals (sample household) -->
+<!-- 📸 SCREENSHOT docs/screenshots/hero.png: HSA Locker on a phone: Home with reimbursable, reimbursed and documented totals (sample household) -->
 
 - **Every original, kept.** PDFs, photos and the emails they came in are stored privately in your own Cloudflare R2 bucket and open only through the app.
 - **Read for you.** Each document is read by an AI model (Workers AI by default, inside your Cloudflare account) into dates, patient, provider, amount and card. Receipts become one entry; EOBs become one line per service.
 - **Checked, not guessed.** An amount that isn’t printed in the document, an unknown patient, a likely duplicate or a date in the future goes to **Review** instead of into your totals.
-- **What you can reimburse.** Home shows outstanding reimbursable, reimbursed and documented per year. EOB lines are kept for reference and never count as money. Receipts paid with your HSA card are excluded automatically.
+- **What you can reimburse.** Home shows reimbursable, reimbursed and documented per year. EOB lines are kept for reference and never count as money. Receipts paid with your HSA card are marked not claimable automatically.
 - **Record reimbursements.** Select receipts, record the withdrawal, and compare the total with your HSA statement. Undo any time.
 - **Review reminders.** Optionally, a daily email when something is waiting in Review, sent by the Worker itself to an address you verify in Cloudflare.
 - **Email inbox.** Give HSA Locker a private address on a subdomain you own and set your mail to forward receipts and EOBs to it. Gmail’s forwarding confirmation code shows up right in the app.
 - **People and providers.** “Sam”, “Sam Example” and “Example, Sam” are one person; “Lakeside Surgical Suit” on an EOB can be the same provider as on the receipt.
 - **Exports.** A CSV of the ledger (any filter), a JSON backup, and a ZIP of every original named by date, person, provider and amount: an audit packet.
-- **AI assistants.** Connect Claude, ChatGPT or any MCP-capable assistant to ask what’s outstanding or record a reimbursement.
+- **AI assistants.** Connect Claude, ChatGPT or any MCP-capable assistant to ask what’s reimbursable or record a reimbursement.
 - **Yours.** It runs on your own Cloudflare account. No third-party scripts. The only thing it sends out is an anonymous daily count you can switch off, and nothing from your receipts or documents is ever in it.
 
 One deployment is one household. HSA Locker isn’t tax advice and makes no HIPAA compliance claims.
@@ -142,12 +142,12 @@ Once a day your copy tells HSA Locker's developer that it exists: a random id it
 
 **Needs a domain on your Cloudflare account.** A `workers.dev` address can’t receive email.
 
-- **You have one:** open **Settings → Get receipts by email** and follow the steps. You’ll add a **new subdomain** (for example `hsa-in.example.com`) under **Compute → Email Service → Email Routing**, so your normal email isn’t touched. The optional daily reminder email sends from the same subdomain.
+- **You have one:** open **Settings → Receipt forwarding address** and follow the steps. You’ll add a **new subdomain** (for example `hsa-in.example.com`) under **Compute → Email Service → Email Routing**, so your normal email isn’t touched. The optional daily reminder email sends from the same subdomain.
 - **You don’t:** skip this. **Upload** and **Take photo** do the same thing.
 
 Details are in [docs/email-setup.md](docs/email-setup.md).
 
-<!-- 📸 SCREENSHOT docs/screenshots/inbox-setup.png: Settings → Get receipts by email with the steps for the forwarding address -->
+<!-- 📸 SCREENSHOT docs/screenshots/inbox-setup.png: Settings → Receipt forwarding address with the steps for the forwarding address -->
 
 ## Choose the AI model
 
@@ -179,7 +179,7 @@ HSA Locker includes an [MCP](https://modelcontextprotocol.io) server at `https:/
 Not sure what to ask? Ask the assistant “what can you do with HSA Locker?”: it calls `get_started`, which returns your current totals and open items with example requests that fit. Some to try:
 
 - “How much can I reimburse myself from my HSA right now, and which receipts make that up?”
-- “I withdrew \<amount> from my HSA on \<date>. Find outstanding receipts that add up to it and record the reimbursement once I confirm.”
+- “I withdrew \<amount> from my HSA on \<date>. Find reimbursable receipts that add up to it and record the reimbursement once I confirm.”
 - “Go through my review queue: tell me what’s wrong with each item and what you’d fix.”
 - “What did we spend on \<person>’s care in \<year>, by category and provider?”
 
@@ -245,7 +245,7 @@ Tests never call a real model: they use a fake provider and synthetic documents.
 - **D1 is the work queue.** Uploads and email insert a `pending` document and start reading it right away; a cron sweeper every 10 minutes retries failures with backoff and picks up anything stuck. The `email()` handler only stores the raw message; parsing happens afterwards, which keeps it within CPU limits.
 - **Reading:** PDF text layers come from `toMarkdown()`; photos go to a vision model (`@cf/google/gemma-4-26b-a4b-it`) with a JSON schema. The model’s output is validated, then checked: amounts must appear in the document’s text, names are matched to people and aliases, duplicates are flagged.
 - **React**, **TypeScript**, **Vite**, **Tailwind CSS**, **TanStack Query** and **React Router**, with a service worker from `vite-plugin-pwa`.
-- `src/shared` holds the money rules (outstanding, reimbursed, pending review), name matching, duplicate detection and the extraction schema, used by both the Worker and the app and covered by unit tests.
+- `src/shared` holds the money rules (reimbursable, reimbursed, not claimable, pending review), name matching, duplicate detection and the extraction schema, used by both the Worker and the app and covered by unit tests.
 - Sign-in uses one password per instance: a signed, HttpOnly session cookie, rate-limited attempts, and sessions that end when the password changes. AI assistants connect over MCP with OAuth 2.1 (`@cloudflare/workers-oauth-provider`).
 
 ## Support

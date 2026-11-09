@@ -20,6 +20,7 @@ import { ActionList, cx, Empty, PageHeader, PrimaryButton, Sheet } from '../comp
 import { api } from '../lib/api';
 import { money, plural, shortDate } from '../lib/format';
 import { useAppState, useLedger, useReimbursements } from '../lib/queries';
+import { useSaveFile } from '../lib/files';
 import { useSave } from '../lib/useSave';
 
 export function Ledger() {
@@ -35,6 +36,9 @@ export function Ledger() {
   const [upload, setUpload] = useState(false);
   const { run } = useSave();
   const toast = useToast();
+  const saveFile = useSaveFile();
+  const exportCsv = () =>
+    void saveFile(`/api/export/ledger.csv?${filterToParams(filter).toString()}`, 'ledger.csv');
   const names = useMemo(() => namesFor(state), [state]);
   const query = params.toString();
 
@@ -198,32 +202,26 @@ export function Ledger() {
             Mark reimbursed
           </PrimaryButton>
           <PrimaryButton tone="secondary" className="py-2" onClick={() => setExcludeOpen(true)}>
-            Exclude…
+            Not claimable…
           </PrimaryButton>
-          <a
+          <button
+            type="button"
             className="inline-flex items-center gap-1.5 rounded-full bg-chip px-4 py-2 text-[15px] font-medium text-ink"
-            href={`/api/export/ledger.csv?${filterToParams(filter).toString()}`}
+            onClick={exportCsv}
           >
             Export CSV
-          </a>
+          </button>
         </div>
       </div>
       {!chosen.length && rows.length > 0 && (
         <div className="px-5 pt-4">
-          <a
-            className="text-sm text-accent"
-            href={`/api/export/ledger.csv?${filterToParams(filter).toString()}`}
-          >
+          <button type="button" className="text-sm text-accent" onClick={exportCsv}>
             Export these as CSV
-          </a>
+          </button>
         </div>
       )}
 
-      <Sheet
-        open={excludeOpen}
-        onClose={() => setExcludeOpen(false)}
-        title="Exclude from reimbursable"
-      >
+      <Sheet open={excludeOpen} onClose={() => setExcludeOpen(false)} title="Mark not claimable">
         <ActionList
           actions={[
             ...EXCLUDED_REASONS.map(([k, label]) => ({
@@ -233,14 +231,16 @@ export function Ledger() {
                 await run(() =>
                   api.post('/entries/bulk', { ids: [...selected], action: 'exclude', reason: k }),
                 );
-                toast({ text: `Excluded ${plural(selected.size, 'entry', 'entries')}` });
+                toast({
+                  text: `Marked ${plural(selected.size, 'entry', 'entries')} not claimable`,
+                });
                 setExcludeOpen(false);
                 setSelected(new Set());
               },
             })),
             {
               icon: 'undo' as const,
-              label: 'Remove exclusion',
+              label: 'Mark claimable again',
               onClick: async () => {
                 await run(() =>
                   api.post('/entries/bulk', { ids: [...selected], action: 'unexclude' }),

@@ -51,7 +51,7 @@ button{font:inherit;font-size:15px;border:0;border-radius:999px;padding:10px 18p
 </style></head><body><main>
 <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor" style="color:var(--accent)"/><g fill="none" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 12h28v40l-4.7-3-4.6 3-4.7-3-4.7 3-4.6-3L18 52z"/><path d="M32 22v12M26 28h12"/><path d="M25 42h14"/></g></svg>
 <h1>Let ${name} use HSA Locker?</h1>
-<p>It will be able to read your receipts’ details, totals and review queue, and mark receipts reimbursed or excluded.</p>
+<p>It will be able to read your receipts’ details, totals and review queue, and mark receipts reimbursed or not claimable.</p>
 <p>${who} Access goes to <strong>${esc(info.redirectHost)}</strong>.</p>
 ${info.loopback ? '<p class="warn">This sends access to an app on your computer. Continue only if you just started connecting from it.</p>' : ''}
 <form method="post">

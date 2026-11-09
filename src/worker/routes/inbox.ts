@@ -1,4 +1,4 @@
-// Settings → Get receipts by email: the address, its log, forwarding confirmations, rotate.
+// Settings → Receipt forwarding address: the address, its log, forwarding confirmations, rotate.
 import { Hono } from 'hono';
 import { mxStatus, nsStatus, registrableDomain, routingStatus } from '@shared/logic';
 import type { InboxLogRow, InboxVerification } from '@shared/types';

@@ -98,7 +98,7 @@ export async function handleEmail(
   );
   if ((today?.n ?? 0) >= settings.inbox_daily_cap) return reject('daily_cap', 'try again tomorrow');
 
-  // Log first, so a failure storing the message still shows up in Settings → Get receipts by email.
+  // Log first, so a failure storing the message still shows up in Settings → Receipt forwarding address.
   const id = newId();
   const emlKey = `eml/${id}.eml`;
   await db
@@ -212,7 +212,7 @@ export async function processInboxMessage(env: Cloudflare.Env, logId: string): P
     const fromAddr = (email.from?.address ?? claimed.from_addr ?? '').toLowerCase();
     const subject = email.subject ?? '';
 
-    // Forwarding confirmations are surfaced in Settings → Get receipts by email, never processed as documents.
+    // Forwarding confirmations are surfaced in Settings → Receipt forwarding address, never processed as documents.
     const verification = detectVerification({
       from: fromAddr,
       subject,

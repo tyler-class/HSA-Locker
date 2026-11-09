@@ -19,6 +19,7 @@ import { api } from '../lib/api';
 import { formatDate, money, plural } from '../lib/format';
 import { useAppState, useDocument, useReview } from '../lib/queries';
 import { useSave } from '../lib/useSave';
+import { useViewer } from '../lib/viewer';
 import { Select } from '../components/Select';
 
 export function Review() {
@@ -80,6 +81,7 @@ function ReviewDoc({ id, state, onDone }: { id: string; state: AppState; onDone:
   const { run, busy, error } = useSave();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
+  const viewer = useViewer();
   if (!doc.data) return null;
   const { document: d, entries } = doc.data;
   const reviewing = entries.filter((e) => e.review_reasons.length);
@@ -89,6 +91,28 @@ function ReviewDoc({ id, state, onDone }: { id: string; state: AppState; onDone:
     <div className="grid gap-5 px-5 pt-2 md:grid-cols-2">
       <div className="flex flex-col gap-2 md:sticky md:top-4 md:self-start">
         <DocPreview doc={d} />
+        {d.status !== 'discarded' && (
+          <div className="flex items-center gap-4 text-sm">
+            <button
+              type="button"
+              onClick={() => viewer.open('doc', d.id)}
+              className="inline-flex items-center gap-1.5 text-accent"
+            >
+              <Icon name="open" size={15} />
+              Open
+            </button>
+            {d.has_eml && (
+              <button
+                type="button"
+                onClick={() => viewer.open('email', d.id)}
+                className="inline-flex items-center gap-1.5 text-accent"
+              >
+                <Icon name="mail" size={15} />
+                Original email
+              </button>
+            )}
+          </div>
+        )}
         <p className="text-xs text-faint">
           {d.filename} ·{' '}
           {d.source === 'email'

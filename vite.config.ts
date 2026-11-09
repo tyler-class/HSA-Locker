@@ -1,21 +1,59 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { extname, join } from 'node:path';
 import { sourceDefines } from './scripts/kit/source';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version: string;
 };
 
+/**
+ * pdf.js's data files (standard fonts, CMaps, ICC profiles, image-decoder wasm), served at
+ * /pdfjs/ in dev and copied there in the build. Fetched only when a PDF needs them; never
+ * precached (the service worker's globs skip these types).
+ */
+function pdfjsAssets(): Plugin {
+  const root = fileURLToPath(new URL('./node_modules/pdfjs-dist/', import.meta.url));
+  const keep = new Set(['.wasm', '.pfb', '.ttf', '.bcmap', '.icc']);
+  const files = ['wasm', 'standard_fonts', 'cmaps', 'iccs'].flatMap((dir) =>
+    readdirSync(join(root, dir))
+      .filter((f) => keep.has(extname(f)) && !f.startsWith('quickjs'))
+      .map((f) => `${dir}/${f}`),
+  );
+  const types: Record<string, string> = { '.wasm': 'application/wasm' };
+  return {
+    name: 'pdfjs-assets',
+    configureServer(server) {
+      server.middlewares.use('/pdfjs/', (req, res, next) => {
+        const rel = decodeURIComponent((req.url ?? '').split('?')[0]!.replace(/^\//, ''));
+        if (!files.includes(rel)) return next();
+        res.setHeader('Content-Type', types[extname(rel)] ?? 'application/octet-stream');
+        res.end(readFileSync(join(root, rel)));
+      });
+    },
+    generateBundle() {
+      if (this.environment.name !== 'client') return;
+      for (const f of files)
+        this.emitFile({
+          type: 'asset',
+          fileName: `pdfjs/${f}`,
+          source: readFileSync(join(root, f)),
+        });
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     cloudflare(),
+    pdfjsAssets(),
     VitePWA({
       // 'prompt' so lib/pwa.ts decides when to switch (never mid-form); it reloads on its own.
       registerType: 'prompt',
@@ -43,6 +81,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // pdf.js loads on demand and only online (files are never cached), so it isn't precached.
+        globIgnores: ['**/pdfjs-*.js'],
         // Pages are network-first (below), so a deploy shows up on the next load instead of
         // after the service worker updates. index.html stays precached only as the offline copy.
         navigateFallback: null,

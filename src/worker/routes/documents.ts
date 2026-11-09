@@ -1,5 +1,6 @@
 // Documents: upload, list, detail, the original file, reprocess, discard, and queue actions.
 import { Hono } from 'hono';
+import PostalMime from 'postal-mime';
 import { ACCEPTED_MIME, MAX_UPLOAD_BYTES } from '@shared/lookups';
 import { mimeFromName, sniffMime } from '@shared/logic';
 import { entryCreate } from '@shared/schemas';
@@ -15,6 +16,7 @@ import {
   type Row,
 } from '../db';
 import { MAX_ATTEMPTS, processDocument, sweep } from '../extract/pipeline';
+import { htmlToText } from '../extract/text';
 import { cleanFilename, storeDocument } from '../store';
 import { refreshDocStatus } from '../status';
 import { ApiError, body, notFound, type AppEnv } from './util';
@@ -137,6 +139,35 @@ documents.get('/files/:id', async (c) => {
           : "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'; sandbox",
       'Cross-Origin-Resource-Policy': 'same-origin',
     },
+  });
+});
+
+/** The kept original email, read for the app's email view: headers, plain body, attachment names. */
+documents.get('/documents/:id/email', async (c) => {
+  const row = await loadDoc(c.env.DB, c.req.param('id'));
+  if (!row.eml_key) throw notFound('Email');
+  const obj = await c.env.FILES.get(String(row.eml_key));
+  if (!obj) throw notFound('Email');
+  const email = await PostalMime.parse(await obj.arrayBuffer());
+  const who = (a?: { name?: string; address?: string } | null) =>
+    a ? (a.name && a.address ? `${a.name} <${a.address}>` : (a.address ?? a.name ?? '')) : '';
+  const list = (l?: { name?: string; address?: string }[]) =>
+    (l ?? []).map(who).filter(Boolean).join(', ');
+  const text = (email.text?.trim() ? email.text : email.html ? htmlToText(email.html) : '').trim();
+  return c.json({
+    from: who(email.from),
+    to: list(email.to),
+    cc: list(email.cc),
+    date: email.date ?? null,
+    subject: email.subject ?? '',
+    text: text.slice(0, 200_000),
+    attachments: email.attachments
+      .filter((a) => a.disposition !== 'inline' || !a.contentId)
+      .map((a) => ({
+        filename: a.filename ?? 'attachment',
+        mime: a.mimeType,
+        size: typeof a.content === 'string' ? a.content.length : a.content.byteLength,
+      })),
   });
 });
 

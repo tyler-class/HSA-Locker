@@ -92,7 +92,7 @@ export function Home() {
 
       <div className="grid grid-cols-1 gap-3 px-5 pt-4 sm:grid-cols-3">
         <Stat
-          label="Outstanding reimbursable"
+          label="Reimbursable"
           value={money(s?.totals.outstanding_cents ?? 0)}
           sub="Ready to withdraw from your HSA"
           to="/ledger?status=outstanding"
@@ -121,7 +121,7 @@ export function Home() {
                 <th className="px-3 hidden py-2 text-right font-normal sm:table-cell">
                   Reimbursed
                 </th>
-                <th className="px-3 py-2 text-right font-normal">Outstanding</th>
+                <th className="px-3 py-2 text-right font-normal">Reimbursable</th>
                 <th className="px-3 hidden py-2 text-right font-normal md:table-cell">Receipts</th>
                 <th className="px-3 hidden py-2 text-right font-normal md:table-cell">EOBs</th>
               </tr>

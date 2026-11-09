@@ -1,17 +1,17 @@
-// The Ledger's filter bar: status tabs, search, one Filters button (sheet) and sort.
+// The Ledger's filter bar: a status switch, search, one Filters button (sheet) and sort.
 import { useState } from 'react';
 import type { LedgerFilter, SortKey, StatusFilter, TypeFilter } from '@shared/logic';
 import type { AppState } from '@shared/types';
 import { Icon } from './Icon';
 import { Select } from './Select';
-import { cx, GhostButton, PrimaryButton, Sheet, TextInput } from './ui';
+import { cx, GhostButton, PrimaryButton, Sheet, SlideToggle, TextInput } from './ui';
 
 const STATUS_TABS: [StatusFilter, string][] = [
   ['all', 'All'],
-  ['outstanding', 'Outstanding'],
   ['needs_review', 'Needs review'],
+  ['outstanding', 'Reimbursable'],
   ['reimbursed', 'Reimbursed'],
-  ['excluded', 'Excluded'],
+  ['excluded', 'Not claimable'],
 ];
 
 const SORTS: [SortKey, string][] = [
@@ -64,29 +64,12 @@ export function LedgerFilters({
 
   return (
     <div className="flex flex-col gap-3 px-5 pt-2">
-      <div
-        role="tablist"
-        aria-label="Status"
-        className="no-scrollbar -mx-5 flex gap-5 overflow-x-auto border-b border-line px-5"
-      >
-        {STATUS_TABS.map(([k, label]) => {
-          const on = (filter.status ?? 'all') === k;
-          return (
-            <button
-              key={k}
-              role="tab"
-              aria-selected={on}
-              onClick={() => setFilter({ status: k })}
-              className={cx(
-                '-mb-px border-b-2 pt-1 pb-2.5 text-[15px] whitespace-nowrap transition-colors',
-                on ? 'border-accent font-semibold text-ink' : 'border-transparent text-soft',
-              )}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
+      <SlideToggle
+        label="Status"
+        value={filter.status ?? 'all'}
+        onChange={(status) => setFilter({ status })}
+        options={STATUS_TABS}
+      />
 
       <div className="flex items-center gap-2">
         <div className="relative min-w-0 flex-1">

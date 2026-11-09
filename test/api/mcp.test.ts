@@ -171,14 +171,14 @@ describe('mcp', () => {
 
     const s = await tool(token, 'get_started', {});
     expect(s.isError).toBe(false);
-    expect(s.text).toContain('Outstanding reimbursable: $');
+    expect(s.text).toContain('Reimbursable: $');
     expect(s.text).toContain('Waiting for review');
     for (const e of EXAMPLE_PROMPTS) expect(s.text).toContain(e.prompt);
     for (const p of MCP_PROMPTS) expect(s.text).toContain(p.name);
 
     // The examples' read tools actually work on this data.
     const sum = await tool(token, 'get_summary', {});
-    expect(sum.text).toContain('outstanding_reimbursable');
+    expect(sum.text).toContain('"reimbursable"');
     const out = await tool(token, 'list_entries', { status: 'outstanding', type: 'receipt' });
     expect(out.isError).toBe(false);
     expect(JSON.parse(out.text).count).toBeGreaterThan(0);

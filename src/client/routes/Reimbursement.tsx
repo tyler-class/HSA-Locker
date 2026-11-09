@@ -48,7 +48,8 @@ export function Reimbursement() {
           icon="undo"
           disabled={busy}
           onClick={async () => {
-            if (!confirm('Undo this reimbursement? Its receipts become outstanding again.')) return;
+            if (!confirm('Undo this reimbursement? Its receipts become reimbursable again.'))
+              return;
             if (await run(() => api.del(`/reimbursements/${r.id}`))) {
               toast({ text: 'Reimbursement undone' });
               nav('/ledger');

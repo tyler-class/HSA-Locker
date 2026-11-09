@@ -277,9 +277,9 @@ export function EntryForm({
         />
       </Field>
       {value.type === 'receipt' ? (
-        <Field label="Exclude from reimbursable">
+        <Field label="Not claimable">
           <Select
-            label="Exclude from reimbursable"
+            label="Not claimable"
             value={value.excluded_reason}
             onChange={(v) => set('excluded_reason', v)}
             options={[['', 'No'], ...EXCLUDED_REASONS]}

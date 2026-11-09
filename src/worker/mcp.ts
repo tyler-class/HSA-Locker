@@ -56,9 +56,9 @@ function totalsView(t: Totals | YearTotals) {
     ...('year' in t ? { year: t.year ?? 'undated' } : {}),
     documented: dollars(t.documented_cents),
     reimbursed: dollars(t.reimbursed_cents),
-    outstanding_reimbursable: dollars(t.outstanding_cents),
+    reimbursable: dollars(t.outstanding_cents),
     pending_review: dollars(t.pending_review_cents),
-    excluded: dollars(t.excluded_cents),
+    not_claimable: dollars(t.excluded_cents),
     receipts: t.receipt_count,
     eob_documents: t.eob_document_count,
     eob_lines: t.eob_line_count,
@@ -102,10 +102,10 @@ export const INSTRUCTIONS = `HSA Locker keeps a household's medical receipts and
 
 How to work with it:
 - Receipts carry the amount the patient paid; only receipts count toward reimbursable totals. EOB lines are reference only and never count.
-- An entry's status is outstanding (reimbursable now), reimbursed, excluded (paid with the HSA card, not eligible, or reimbursed another way), or needs review. Amounts waiting for review are never part of outstanding.
+- An entry's status is reimbursable (status value "outstanding": can be reimbursed now), reimbursed, not claimable (status value "excluded": paid with the HSA card, not eligible, or reimbursed another way), or needs review. Amounts waiting for review are never part of reimbursable. Use the words reimbursable and not claimable with the user.
 - Money in tool results is exact: *_cents fields are integer cents, amount strings are dollars to the cent. Add amounts as cents.
 - Use list_entries (filters: year, person, category, provider, status, text) to find entries and their ids before changing anything.
-- Ask before recording a reimbursement, excluding receipts, or changing several entries at once. Show the list and total first.
+- Ask before recording a reimbursement, marking receipts not claimable, or changing several entries at once. Show the list and total first.
 - You can't see the documents themselves, only what was read from them.
 
 When someone asks what you can do with HSA Locker (or seems unsure where to start), call get_started: it returns their current totals and open items and example requests to offer. Suggest two or three that fit, phrased for their data, rather than listing tools. Examples:
@@ -143,7 +143,7 @@ function buildServer(call: Call) {
   server.registerTool(
     'get_summary',
     {
-      description: `Totals for the household's HSA: documented, reimbursed, outstanding reimbursable and pending review, overall and per year. ${MONEY_NOTE} Outstanding never includes amounts still waiting for review.`,
+      description: `Totals for the household's HSA: documented, reimbursed, reimbursable and pending review, overall and per year. ${MONEY_NOTE} Reimbursable never includes amounts still waiting for review.`,
       inputSchema: z.object({ year: z.number().int().optional().describe('Only this year') }),
     },
     async ({ year }) => {
@@ -173,7 +173,9 @@ function buildServer(call: Call) {
         person: z.string().optional().describe('Name or id'),
         category: z.string().optional(),
         provider: z.string().optional(),
-        status: statusEnum.optional().describe('outstanding = reimbursable now'),
+        status: statusEnum
+          .optional()
+          .describe('outstanding = reimbursable now; excluded = not claimable'),
         type: z.enum(['all', 'receipt', 'eob']).optional(),
         text: z.string().optional(),
         limit: z.number().int().min(1).max(500).default(100),
@@ -230,7 +232,7 @@ function buildServer(call: Call) {
     'list_review_queue',
     {
       description:
-        'Entries waiting for review, with the reasons. Their amounts are not counted as outstanding until approved.',
+        'Entries waiting for review, with the reasons. Their amounts are not counted as reimbursable until approved.',
       inputSchema: z.object({}),
     },
     async () => {
@@ -268,7 +270,7 @@ function buildServer(call: Call) {
   server.registerTool(
     'mark_reimbursed',
     {
-      description: `Record an HSA reimbursement covering these receipts (ids from list_entries). Only outstanding receipts can be included; EOB lines can't. Returns the total, to compare with the HSA withdrawal. ${MONEY_NOTE}`,
+      description: `Record an HSA reimbursement covering these receipts (ids from list_entries). Only reimbursable receipts can be included; EOB lines can't. Returns the total, to compare with the HSA withdrawal. ${MONEY_NOTE}`,
       inputSchema: z.object({
         entry_ids: z.array(z.string()).min(1).max(500),
         date: z
@@ -301,7 +303,7 @@ function buildServer(call: Call) {
     'unmark_reimbursed',
     {
       description:
-        'Take receipts out of their reimbursement (they become outstanding again). A reimbursement left empty is removed.',
+        'Take receipts out of their reimbursement (they become reimbursable again). A reimbursement left empty is removed.',
       inputSchema: z.object({ entry_ids: z.array(z.string()).min(1).max(500) }),
     },
     async ({ entry_ids }) => {
@@ -367,7 +369,7 @@ function buildServer(call: Call) {
     'approve_entry',
     {
       description:
-        'Mark an entry in the review queue as checked. Its amount then counts as outstanding (if it is an unreimbursed, non-excluded receipt).',
+        'Mark an entry in the review queue as checked. Its amount then counts as reimbursable (if it is an unreimbursed receipt that isn’t marked not claimable).',
       inputSchema: z.object({ id: z.string() }),
     },
     async ({ id }) => {
@@ -384,13 +386,13 @@ function buildServer(call: Call) {
     'exclude_entry',
     {
       description:
-        'Exclude a receipt from reimbursable totals, with a reason: paid_with_hsa (already paid tax-free with the HSA card), not_eligible, or reimbursed_elsewhere. reason null removes the exclusion.',
+        'Mark a receipt not claimable (left out of reimbursable totals), with a reason: paid_with_hsa (already paid tax-free with the HSA card), not_eligible, or reimbursed_elsewhere. reason null makes it claimable again.',
       inputSchema: z.object({ id: z.string(), reason: excludedEnum.nullable() }),
     },
     async ({ id, reason }) => {
       try {
         await call('PATCH', `/entries/${encodeURIComponent(id)}`, { excluded_reason: reason });
-        return text(reason ? `Excluded (${reason}).` : 'Exclusion removed.');
+        return text(reason ? `Marked not claimable (${reason}).` : 'Claimable again.');
       } catch (e) {
         return fail(e);
       }
@@ -422,7 +424,7 @@ function buildServer(call: Call) {
         const lines = s.counts.documents
           ? [
               `${s.counts.documents} documents: ${t.receipt_count} receipts and ${t.eob_document_count} EOBs (${t.eob_line_count} EOB lines).`,
-              `Outstanding reimbursable: ${usd(t.outstanding_cents)}. Reimbursed so far: ${usd(t.reimbursed_cents)}.`,
+              `Reimbursable: ${usd(t.outstanding_cents)}. Reimbursed so far: ${usd(t.reimbursed_cents)}.`,
               sum.this_year
                 ? `Documented in ${sum.this_year.year}: ${usd(sum.this_year.documented_cents)}.`
                 : '',
@@ -435,7 +437,7 @@ function buildServer(call: Call) {
               s.counts.in_flight ? `${s.counts.in_flight} document(s) are still being read.` : '',
               s.people.length ? `People: ${s.people.map((p) => p.name).join(', ')}.` : '',
               s.settings.hsa_cards.length
-                ? `HSA cards on file (receipts paid with them are excluded automatically): ${s.settings.hsa_cards.map((c) => `…${c}`).join(', ')}.`
+                ? `HSA cards on file (receipts paid with them are marked not claimable automatically): ${s.settings.hsa_cards.map((c) => `…${c}`).join(', ')}.`
                 : 'No HSA card is on file in Settings.',
             ]
               .filter(Boolean)
@@ -463,13 +465,13 @@ function buildServer(call: Call) {
     {
       title: 'Record a reimbursement',
       description:
-        'Pick outstanding receipts for an HSA withdrawal, confirm the list and total, then record it.',
+        'Pick reimbursable receipts for an HSA withdrawal, confirm the list and total, then record it.',
       argsSchema: z.object({
         amount: z
           .string()
           .optional()
           .describe(
-            'Optional: the withdrawal amount to match, e.g. 412.50. Leave empty to cover everything outstanding.',
+            'Optional: the withdrawal amount to match, e.g. 412.50. Leave empty to cover everything reimbursable.',
           ),
         date: z
           .string()
@@ -480,10 +482,10 @@ function buildServer(call: Call) {
     ({ amount, date }) =>
       ask(`Help me record an HSA reimbursement in HSA Locker${amount ? ` for $${amount}` : ''}${date ? ` dated ${date}` : ''}.
 
-1. get_summary for the outstanding total, then list_entries with status "outstanding" and type "receipt" (limit 500).
-2. ${amount ? `Pick receipts whose amounts add up exactly to $${amount}, oldest first. Add in cents. If no exact match exists, show the closest combinations and ask.` : 'Propose all outstanding receipts, oldest first.'}
+1. get_summary for the reimbursable total, then list_entries with status "outstanding" (reimbursable) and type "receipt" (limit 500).
+2. ${amount ? `Pick receipts whose amounts add up exactly to $${amount}, oldest first. Add in cents. If no exact match exists, show the closest combinations and ask.` : 'Propose all reimbursable receipts, oldest first.'}
 3. Show me the list (date, patient, provider, amount) and the total. Don't record anything until I confirm.
-4. After I confirm, call mark_reimbursed with those entry ids and the date ${date || 'of today'}, then tell me the recorded total and the new outstanding amount.`),
+4. After I confirm, call mark_reimbursed with those entry ids and the date ${date || 'of today'}, then tell me the recorded total and the new reimbursable amount.`),
   );
 
   server.registerPrompt(
@@ -504,7 +506,7 @@ function buildServer(call: Call) {
 1. list_review_queue and take the first ${limit || '10'} entries.
 2. For each, explain in one line what was flagged and why it matters (an amount not found in the document, an unknown patient, a possible duplicate…), and propose a fix: corrected fields, approve as is, or check it against the document in the app.
 3. Show the proposals as a numbered list and ask which to apply. Don't change anything before I answer.
-4. Apply the ones I accept with update_entry, then approve_entry. Tell me what's left and how much moved into outstanding.`),
+4. Apply the ones I accept with update_entry, then approve_entry. Tell me what's left and how much became reimbursable.`),
   );
 
   server.registerPrompt(
@@ -512,7 +514,7 @@ function buildServer(call: Call) {
     {
       title: 'Year in review',
       description:
-        'Totals for a year by person, category and provider, plus what is still outstanding.',
+        'Totals for a year by person, category and provider, plus what is still reimbursable.',
       argsSchema: z.object({ year: z.string().describe('The year to review, e.g. 2025.') }),
     },
     ({ year }) =>
@@ -520,8 +522,8 @@ function buildServer(call: Call) {
 
 1. get_summary with year ${year}.
 2. list_entries with year ${year} and type "receipt" (limit 500). Total the amounts in cents by person, by category and by provider.
-3. Report documented, reimbursed, excluded, outstanding and pending review; the top providers and categories; and the outstanding receipts, oldest first.
-4. End with one or two suggestions, such as reimbursing the outstanding amount or clearing Review. Don't change anything.`),
+3. Report documented, reimbursed, not claimable, reimbursable and pending review; the top providers and categories; and the reimbursable receipts, oldest first.
+4. End with one or two suggestions, such as reimbursing what's reimbursable or clearing Review. Don't change anything.`),
   );
 
   server.registerPrompt(
@@ -529,7 +531,7 @@ function buildServer(call: Call) {
     {
       title: 'Check HSA card receipts',
       description:
-        'Find receipts paid with your HSA card that still count as reimbursable, and exclude them after you confirm.',
+        'Find receipts paid with your HSA card that still count as reimbursable, and mark them not claimable after you confirm.',
       argsSchema: z.object({
         card_last4: z.string().describe('The last 4 digits of the HSA card.'),
       }),
@@ -537,10 +539,10 @@ function buildServer(call: Call) {
     ({ card_last4 }) =>
       ask(`Check HSA Locker for receipts paid with my HSA card ending ${card_last4}.
 
-1. list_entries with text "${card_last4}" and type "receipt" (limit 500). Keep only receipts whose card_last4 is ${card_last4} and whose status is outstanding or needs_review.
+1. list_entries with text "${card_last4}" and type "receipt" (limit 500). Keep only receipts whose card_last4 is ${card_last4} and whose status is "outstanding" (reimbursable) or "needs_review".
 2. Show me the list and the total. These were already paid from the HSA, so they shouldn't be reimbursed again. Ask before changing anything.
 3. After I confirm, call exclude_entry for each with reason "paid_with_hsa".
-4. Remind me to add ${card_last4} under Settings → Reimbursing → HSA cards so future receipts are excluded automatically.`),
+4. Remind me to add ${card_last4} under Settings → Reimbursing → HSA cards so future receipts are marked not claimable automatically.`),
   );
 
   return server;

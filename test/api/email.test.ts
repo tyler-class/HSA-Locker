@@ -121,6 +121,19 @@ describe('email intake', () => {
     const after = (await api.get<{ document: { status: string } }>(`/documents/${d.id}`)).data
       .document;
     expect(after.status).toBe('processed');
+    // The kept email reads back for the app's email view.
+    const view = (
+      await api.get<{
+        from: string;
+        subject: string;
+        text: string;
+        attachments: { filename: string }[];
+      }>(`/documents/${d.id}/email`)
+    ).data;
+    expect(view.from).toContain('billing@clinic.example');
+    expect(view.subject).toBe('Your receipt');
+    expect(view.text).toContain('See attached.');
+    expect(view.attachments.map((a) => a.filename)).toEqual(['receipt.pdf']);
   });
 
   it('skips inline logos and tiny images, keeps real photos', async () => {

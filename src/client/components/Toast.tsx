@@ -1,10 +1,10 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 
 interface Toast {
   id: number;
   text: string;
-  action?: { label: string; run: () => void };
+  action?: { label: string; run: () => void; icon?: IconName };
 }
 
 const Ctx = createContext<(t: Omit<Toast, 'id'>) => void>(() => {});
@@ -40,7 +40,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   setToast(null);
                 }}
               >
-                <Icon name="undo" size={15} />
+                <Icon name={toast.action.icon ?? 'undo'} size={15} />
                 {toast.action.label}
               </button>
             )}

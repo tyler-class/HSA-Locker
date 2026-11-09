@@ -59,7 +59,7 @@ Running it again is safe: files already stored are recognized by their SHA-256, 
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
 | Apply Pending Label      | Gone: forwarded mail arrives directly.                                                                                        |
 | Process Email → Drive    | Gone: Email Routing pushes mail to the Worker.                                                                                |
-| Run Drive → Sheet Sync   | Gone: the sweeper reads pending documents. Settings → Get receipts by email has **Process pending now** and **Retry failed**. |
+| Run Drive → Sheet Sync   | Gone: the sweeper reads pending documents. Settings → Receipt forwarding address has **Process pending now** and **Retry failed**. |
 | Deduplicate Sheet        | Prevented: files are unique by SHA-256, reading is idempotent, likely duplicates go to Review.                                |
 | Backfill Drive → Sheet   | Bulk upload, and this import.                                                                                                 |
 | Remove [LOGGED] Prefixes | Gone: state lives in the database.                                                                                            |

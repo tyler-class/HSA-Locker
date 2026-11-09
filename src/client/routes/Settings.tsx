@@ -22,6 +22,7 @@ import {
   TextInput,
 } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
+import { deliverFile, useSaveFile } from '../lib/files';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
 import { useTheme, type Theme } from '../lib/theme';
@@ -48,13 +49,11 @@ function Row({
   icon,
   children,
   onClick,
-  href,
   to,
 }: {
   icon: Parameters<typeof Icon>[0]['name'];
   children: React.ReactNode;
   onClick?: () => void;
-  href?: string;
   to?: string;
 }) {
   const cls =
@@ -71,12 +70,6 @@ function Row({
       <Link to={to} className={cls}>
         {inner}
       </Link>
-    );
-  if (href)
-    return (
-      <a href={href} download className={cls}>
-        {inner}
-      </a>
     );
   return (
     <button onClick={onClick} className={cls}>
@@ -111,6 +104,7 @@ export function Settings() {
   const fileRef = useRef<HTMLInputElement>(null);
   const zipRef = useRef<HTMLInputElement>(null);
   const emailPath = useEmailPath();
+  const saveFile = useSaveFile();
   if (!state) return null;
   const s = state.settings;
 
@@ -164,13 +158,15 @@ export function Settings() {
       ).text();
       zip.add('ledger.csv', new TextEncoder().encode(csv));
       zip.add('manifest.json', new TextEncoder().encode(JSON.stringify(manifest, null, 2)));
-      const url = URL.createObjectURL(zip.finish());
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `hsa-locker-documents-${new Date().toISOString().slice(0, 10)}.zip`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      const name = `hsa-locker-documents-${new Date().toISOString().slice(0, 10)}.zip`;
+      const file = new File([zip.finish()], name, { type: 'application/zip' });
       setZipStatus('');
+      // Phones: the share sheet (a slow build can need one more tap). Computers: a download.
+      if ((await deliverFile(file)) === 'needs-tap')
+        toast({
+          text: 'Your ZIP is ready.',
+          action: { label: 'Share', icon: 'share', run: () => void deliverFile(file) },
+        });
     } catch (e) {
       setZipStatus(errorMessage(e));
     }
@@ -232,7 +228,7 @@ export function Settings() {
         />
       </div>
 
-      <SectionLabel icon="inbox">Get receipts by email</SectionLabel>
+      <SectionLabel icon="mailSend">Receipt forwarding address</SectionLabel>
       <div className="px-6 pt-3">
         {s.inbox_address ? (
           <Row icon="mail" to="/settings/inbox">
@@ -246,7 +242,7 @@ export function Settings() {
             <DomainFork path={emailPath} />
             {emailPath.go && (
               <Row icon="mail" to="/settings/inbox">
-                Set up receipts by email
+                Set up a receipt forwarding address
               </Row>
             )}
           </>
@@ -274,8 +270,8 @@ export function Settings() {
       <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
         <span className="text-ink">HSA cards</span>
         <p className="text-soft">
-          Receipts paid with these cards are excluded as “Paid with the HSA card”. Others (or with
-          no card printed) stay reimbursable.
+          Receipts paid with these cards are marked not claimable (“Paid with the HSA card”). Others
+          (or with no card printed) stay reimbursable.
         </p>
         <div className="flex flex-wrap gap-1.5">
           {s.hsa_cards.map((c) => (
@@ -399,13 +395,13 @@ export function Settings() {
         named by date, person, provider and amount, plus a ledger.csv: an audit packet.
       </p>
       <div className="flex flex-col px-6 pt-1">
-        <Row icon="download" href="/api/export">
+        <Row icon="download" onClick={() => void saveFile('/api/export', 'hsa-locker-backup.json')}>
           Download data backup (JSON)
         </Row>
         <Row icon="download" onClick={downloadDocuments}>
           Download all documents (ZIP)
         </Row>
-        <Row icon="download" href="/api/export/ledger.csv">
+        <Row icon="download" onClick={() => void saveFile('/api/export/ledger.csv', 'ledger.csv')}>
           Download ledger (CSV)
         </Row>
         <Row icon="upload" onClick={() => fileRef.current?.click()}>
@@ -624,15 +620,15 @@ function Notifications() {
   const num = 'text-ink font-medium';
   return (
     <>
-      <SectionLabel icon="mail">Daily reminder email</SectionLabel>
+      <SectionLabel icon="bell">Daily reminder email</SectionLabel>
       <div className="flex flex-col gap-2 px-6 pt-4 text-sm">
         {!ready && <p className="text-ink">{NEEDS_DOMAIN}</p>}
         <p className="text-soft">One email on days when something is waiting in Review.</p>
         {!ready && (
           <p className="rounded-xl bg-chip px-3 py-2.5 text-soft">
-            Set up{' '}
+            Set up a{' '}
             <Link to="/settings/inbox" className="text-accent">
-              Get receipts by email
+              receipt forwarding address
             </Link>{' '}
             first: the reminder sends from its domain.
           </p>

@@ -4,7 +4,7 @@ HSA Locker can receive receipts and EOBs by email. Cloudflare Email Routing hand
 
 **It needs a domain on your Cloudflare account.** A `workers.dev` address can’t receive email, and there’s no way around that.
 
-- **You have one:** follow **Settings → Get receipts by email** in the app (the steps are below too).
+- **You have one:** follow **Settings → Receipt forwarding address** in the app (the steps are below too).
 - **You don’t:** skip this. **Upload** and **Take photo** do everything email does.
 
 If HSA Locker runs on your own domain (a Worker custom domain or route), that domain is already on your Cloudflare account; the app says so and suggests `hsa-in.<your domain>`.
@@ -28,7 +28,7 @@ Keep the app’s hostname and the email subdomain separate (for example the app 
 
 All Cloudflare steps are in the dashboard under **Compute → Email Service → Email Routing** ([open it](https://dash.cloudflare.com/?to=/:account/email-service/routing)).
 
-1. **Choose the address (in HSA Locker):** in **Settings → Get receipts by email**, enter the subdomain and save. HSA Locker shows your address: `hsa-xxxxxxxxxx@hsa-in.example.com`. The `hsa-…` part is a random token. Treat the address like a password: anyone who has it can send documents into your ledger.
+1. **Choose the address (in HSA Locker):** in **Settings → Receipt forwarding address**, enter the subdomain and save. HSA Locker shows your address: `hsa-xxxxxxxxxx@hsa-in.example.com`. The `hsa-…` part is a random token. Treat the address like a password: anyone who has it can send documents into your ledger.
 2. **Add it in Cloudflare:** pick your domain, open **Settings**, and add the subdomain under **Subdomains**. If Cloudflare offers to set up email for the main domain itself, skip it.
 3. **Send its mail to HSA Locker:** under **Routing Rules**, select **Create routing rule**. Enter the address’s name (the `hsa-…` part) and pick the subdomain, set **Action** to **Send to a Worker** and **Destination** to **hsa-locker**, and save.
 4. **Send a test:** email a receipt to the address. The page changes from “Waiting for the first email…” to what arrived, and each step gets a check mark.
@@ -38,11 +38,11 @@ The routing rule is created in the dashboard. Wrangler 4.113+ can also declare E
 ## Forwarding
 
 - **By hand:** forward any email to the address.
-- **Automatically:** create a rule in your mail provider that forwards only the senders you want (your insurer, provider portals, pharmacies). Settings → Get receipts by email has steps for Gmail, Outlook, Fastmail and iCloud.
+- **Automatically:** create a rule in your mail provider that forwards only the senders you want (your insurer, provider portals, pharmacies). Settings → Receipt forwarding address has steps for Gmail, Outlook, Fastmail and iCloud.
 
 ### Forwarding confirmations
 
-Gmail (and sometimes iCloud) sends a confirmation message to a new forwarding address before it will forward automatically. HSA Locker recognizes these, doesn’t treat them as documents, and shows the **code and link under “Verification waiting”** in Settings → Get receipts by email. Enter the code back in Gmail. The patterns live in `src/shared/logic/verification.ts`; other providers can be added there.
+Gmail (and sometimes iCloud) sends a confirmation message to a new forwarding address before it will forward automatically. HSA Locker recognizes these, doesn’t treat them as documents, and shows the **code and link under “Verification waiting”** in Settings → Receipt forwarding address. Enter the code back in Gmail. The patterns live in `src/shared/logic/verification.ts`; other providers can be added there.
 
 ## What gets kept from a message
 
@@ -57,7 +57,7 @@ HEIC photos can be stored but not read by Workers AI; they go to Review. iPhones
 ## Limits and safety
 
 - Mail to any other address at the subdomain is rejected. **Rotate address** makes a new token; the old one stops working immediately.
-- Per-message limits (attachments, size) and a daily cap, all adjustable under Settings → Get receipts by email → Limits. **Accept new mail** pauses the inbox.
+- Per-message limits (attachments, size) and a daily cap, all adjustable under Settings → Receipt forwarding address → Limits. **Accept new mail** pauses the inbox.
 - An optional sender allow list. It’s secondary: auto-forwarded mail keeps the original sender, so it can’t be the main gate.
 - Cloudflare rejects messages that fail the sender’s DMARC policy (or both SPF and DKIM) before they reach the Worker. Email Routing’s own size limit is 25 MiB.
 - HSA Locker never replies to or bounces incoming mail. Everything is visible in the app.

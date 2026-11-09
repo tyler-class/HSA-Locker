@@ -4,7 +4,9 @@ import type { LedgerEntry } from '@shared/types';
 import { api } from '../lib/api';
 import { formatDate, money } from '../lib/format';
 import { useAppState, useDocument } from '../lib/queries';
+import { fileUrl, useSaveFile } from '../lib/files';
 import { useSave } from '../lib/useSave';
+import { useViewer } from '../lib/viewer';
 import { ReasonChips, StatusChip } from './bits';
 import { DocPreview } from './DocPreview';
 import { bodyFromForm, EntryForm, formFromEntry } from './EntryForm';
@@ -31,11 +33,12 @@ function EntrySheetBody({ entry, onClose }: { entry: LedgerEntry; onClose: () =>
   const [menu, setMenu] = useState<DOMRect | null>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
   const { run, busy, error } = useSave();
+  const viewer = useViewer();
+  const saveFile = useSaveFile();
   if (!state) return null;
 
   const reimbursed = !!entry.reimbursement_id;
   const inReview = entry.review_reasons.length > 0;
-  const fileUrl = `/api/files/${entry.document_id}`;
 
   async function save(approve = false) {
     const { body, error } = bodyFromForm(form);
@@ -102,15 +105,14 @@ function EntrySheetBody({ entry, onClose }: { entry: LedgerEntry; onClose: () =>
         <span className="min-w-0 truncate text-soft">
           {doc.data?.document.filename ?? 'Document'}
         </span>
-        <a
-          href={fileUrl}
-          target="_blank"
-          rel="noreferrer"
+        <button
+          type="button"
+          onClick={() => viewer.open('doc', entry.document_id)}
           className="inline-flex flex-none items-center gap-1.5 text-accent"
         >
-          <Icon name="link" size={14} />
+          <Icon name="open" size={15} />
           Open
-        </a>
+        </button>
       </div>
       {doc.data ? (
         <DocPreview doc={doc.data.document} className="min-h-0 flex-1" fill />
@@ -213,20 +215,31 @@ function EntrySheetBody({ entry, onClose }: { entry: LedgerEntry; onClose: () =>
         <ActionList
           actions={[
             {
+              icon: 'open',
+              label: 'Open original',
+              onClick: () => {
+                setMenu(null);
+                viewer.open('doc', entry.document_id);
+              },
+            },
+            {
               icon: 'download',
               label: 'Download original',
               onClick: () => {
-                window.location.href = `${fileUrl}?download=1`;
                 setMenu(null);
+                void saveFile(
+                  fileUrl(entry.document_id),
+                  doc.data?.document.filename ?? 'document',
+                );
               },
             },
             {
               icon: 'mail',
-              label: 'Download original email',
+              label: 'Original email',
               hidden: !doc.data?.document.has_eml,
               onClick: () => {
-                window.location.href = `${fileUrl}?part=eml`;
                 setMenu(null);
+                viewer.open('email', entry.document_id);
               },
             },
             {

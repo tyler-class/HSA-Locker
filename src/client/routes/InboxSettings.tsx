@@ -1,4 +1,4 @@
-// Settings → Get receipts by email: the setup steps (with the person's own domain filled in),
+// Settings → Receipt forwarding address: the setup steps (with the person's own domain filled in),
 // live status, forwarding help and verification codes.
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -130,7 +130,7 @@ export function CloudflareButton({ children }: { children: ReactNode }) {
       className="inline-flex items-center gap-1.5 self-start rounded-full bg-chip px-4 py-2 text-[15px] font-medium text-ink"
     >
       {children}
-      <Icon name="link" size={15} className="text-accent" />
+      <Icon name="open" size={15} className="text-accent" />
     </a>
   );
 }
@@ -235,7 +235,7 @@ export function InboxSettings() {
   const configured = !!s.inbox_address;
   return (
     <div className="pb-16">
-      <PageHeader title="Get receipts by email" back="/settings" sub={<Requirement />} />
+      <PageHeader title="Receipt forwarding address" back="/settings" sub={<Requirement />} />
       {!configured && (
         <div className="px-6 pt-3">
           <DomainFork path={path} requirement={false} />

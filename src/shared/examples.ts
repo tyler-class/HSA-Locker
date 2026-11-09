@@ -17,7 +17,7 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
   },
   {
     prompt:
-      'I withdrew <amount> from my HSA on <date>. Find outstanding receipts that add up to it and record the reimbursement once I confirm.',
+      'I withdrew <amount> from my HSA on <date>. Find reimbursable receipts that add up to it and record the reimbursement once I confirm.',
     why: 'Matches a withdrawal to receipts.',
   },
   {
@@ -30,15 +30,15 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
   },
   {
     prompt:
-      'Find receipts paid with my HSA card ending <last 4> that still count as reimbursable, and exclude them after I check the list.',
+      'Find receipts paid with my HSA card ending <last 4> that still count as reimbursable, and mark them not claimable after I check the list.',
     why: 'Avoids reimbursing twice.',
   },
   {
-    prompt: 'Compare <year> with the year before: documented, reimbursed and still outstanding.',
+    prompt: 'Compare <year> with the year before: documented, reimbursed and still reimbursable.',
     why: 'Where you stand, year over year.',
   },
   {
-    prompt: 'List my oldest outstanding receipts so I can reimburse those first.',
+    prompt: 'List my oldest reimbursable receipts so I can reimburse those first.',
     why: 'Old receipts are easy to forget.',
   },
   {
@@ -52,7 +52,7 @@ export const MCP_PROMPTS: { name: string; title: string; does: string }[] = [
   {
     name: 'record_reimbursement',
     title: 'Record a reimbursement',
-    does: 'Picks outstanding receipts for a withdrawal, confirms the list and total, then records it.',
+    does: 'Picks reimbursable receipts for a withdrawal, confirms the list and total, then records it.',
   },
   {
     name: 'clear_review_queue',
@@ -62,11 +62,11 @@ export const MCP_PROMPTS: { name: string; title: string; does: string }[] = [
   {
     name: 'year_in_review',
     title: 'Year in review',
-    does: 'Totals for a year by person, category and provider, plus what’s still outstanding.',
+    does: 'Totals for a year by person, category and provider, plus what’s still reimbursable.',
   },
   {
     name: 'hsa_card_check',
     title: 'Check HSA card receipts',
-    does: 'Finds receipts paid with your HSA card that still count as reimbursable and excludes them.',
+    does: 'Finds receipts paid with your HSA card that still count as reimbursable and marks them not claimable.',
   },
 ];

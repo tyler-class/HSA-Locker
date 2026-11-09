@@ -205,3 +205,14 @@ export interface InboxVerification {
   code: string | null;
   link: string | null;
 }
+
+/** GET /api/documents/:id/email: the kept original email, for reading in the app. */
+export interface EmailView {
+  from: string;
+  to: string;
+  cc: string;
+  date: string | null;
+  subject: string;
+  text: string;
+  attachments: { filename: string; mime: string; size: number }[];
+}
