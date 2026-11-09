@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { AboutButton } from '../components/AboutSheet';
 import { Icon, type IconName } from '../components/Icon';
@@ -45,16 +46,21 @@ export function Layout() {
   const { pathname } = useLocation();
   const active = activeTab(pathname);
   useTabSwipe(TAB_PATHS, tabRoot(pathname));
+  // A new page starts at the top (the browser did this when the whole document scrolled).
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scroller.current?.scrollTo(0, 0);
+  }, [pathname]);
   const state = useAppState();
   const review = state.data?.counts.review_documents ?? 0;
   const inFlight = state.data?.counts.in_flight ?? 0;
   return (
-    // min-h-lvh: on a page too short to scroll, iOS home-screen apps size the viewport without the
-    // safe areas and the fixed tab bar floats above the bottom. Filling the large viewport avoids it.
-    <div className="min-h-full min-h-lvh md:pl-60 md:pt-safe">
-      {/* Phones: a solid app bar at the top, like Nitrogen's. iOS blurs whatever scrolls under
-          the status bar (and a little below it) in installed apps; over a plain bar it's invisible. */}
-      <header className="sticky top-0 z-20 mb-2 flex h-[calc(env(safe-area-inset-top,0px)+48px)] items-center justify-center gap-2 border-b border-line bg-bg pt-[env(safe-area-inset-top,0px)] md:hidden">
+    // Like Nitrogen: the page is the size of the screen and only the content area below the app
+    // bar scrolls. The document itself never scrolls, so iOS never blurs content under the
+    // status bar in the installed app.
+    <div className="flex h-full flex-col md:pl-60">
+      {/* Phones: a solid app bar at the top. */}
+      <header className="z-20 flex h-[calc(env(safe-area-inset-top,0px)+48px)] flex-none items-center justify-center gap-2 border-b border-line bg-bg pt-[env(safe-area-inset-top,0px)] md:hidden">
         <img src="/favicon.svg" alt="" className="h-7 w-7 rounded-lg" />
         <span className="text-[17px] font-semibold">HSA Locker</span>
       </header>
@@ -102,18 +108,23 @@ export function Layout() {
         </div>
       </aside>
 
-      <main className="mx-auto w-full max-w-2xl pb-[calc(72px+env(safe-area-inset-bottom,0px))] md:max-w-4xl md:px-6 md:pt-4 md:pb-10">
-        {inFlight > 0 && (
-          <p
-            className="mx-5 mt-1 flex items-center gap-2 text-xs text-soft md:hidden"
-            role="status"
-          >
-            <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
-            Reading {inFlight} document{inFlight === 1 ? '' : 's'}…
-          </p>
-        )}
-        <Outlet />
-      </main>
+      <div
+        ref={scroller}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-2 md:pt-safe"
+      >
+        <main className="mx-auto w-full max-w-2xl pb-[calc(72px+env(safe-area-inset-bottom,0px))] md:max-w-4xl md:px-6 md:pt-4 md:pb-10">
+          {inFlight > 0 && (
+            <p
+              className="mx-5 mt-1 flex items-center gap-2 text-xs text-soft md:hidden"
+              role="status"
+            >
+              <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+              Reading {inFlight} document{inFlight === 1 ? '' : 's'}…
+            </p>
+          )}
+          <Outlet />
+        </main>
+      </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 pb-safe backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-2xl grid-cols-4 pt-2 pb-2">
