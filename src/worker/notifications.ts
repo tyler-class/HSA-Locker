@@ -1,18 +1,43 @@
 // HSA Locker's push notifications on top of the Selfhost Kit's push (src/worker/kit/push.ts):
-// "Needs review" for documents reading leaves in Review, and the app-icon count. The words and
-// rules are in src/shared/logic/notify.ts. (The daily reminder email is ./notify.ts.)
+// Needs review, Couldn't read a document, the Reimbursable milestone, Year-end, Email inbox
+// problems and the Weekly summary, and the app-icon count. The words and rules are in
+// src/shared/logic/notify.ts; this file loads what they need. (The daily email is ./notify.ts.)
 import {
+  failedNotice,
+  inboxKeyProblem,
+  inboxNotices,
+  inboxProblem,
+  localDay,
+  milestoneNotice,
+  milestoneStep,
   notifiedIds,
   NOTIFY_FROM_HOUR,
   NOTIFY_KINDS,
+  NOTIFY_LOOKBACK_DAYS,
   NOTIFY_UNTIL_HOUR,
+  pendingInbox,
   pendingReview,
   reviewNotice,
+  summarize,
+  weekday,
+  weeklyNotice,
+  yearEndNotice,
+  type InboxEvent,
+  type MilestoneState,
+  type Notice,
   type ReviewDoc,
 } from '@shared/logic';
-import type { DocKind } from '@shared/types';
-import { all, first, REVIEW_DOC_WHERE } from './db';
-import { pushRoutes, runPushJob, type PushDevice, type PushJobOptions } from './kit/push';
+import type { DocKind, LedgerEntry } from '@shared/types';
+import { all, first, getSetting, loadSettings, REVIEW_DOC_WHERE } from './db';
+import {
+  pushRoutes,
+  runPushJob,
+  wants,
+  type PushCandidate,
+  type PushDevice,
+  type PushJobOptions,
+} from './kit/push';
+import { loadLedger } from './routes/entries';
 
 const ICON = '/pwa-192x192.png';
 
@@ -58,45 +83,177 @@ export async function loadReviewDocs(db: D1Database): Promise<ReviewDoc[]> {
       processed_at: d.extraction_provider === 'hsa-wizard' ? null : d.processed_at,
       reasons: [...arr(d.review_reasons_json), ...es.flatMap((e) => arr(e.review_reasons_json))],
       provider: es.find((e) => e.provider)?.provider ?? null,
+      failed: arr(d.review_reasons_json).includes('extraction_failed'),
     };
   });
 }
 
-/** Document ids this device has already been told about (the kit's sent log; see the README). */
-async function notifiedFor(db: D1Database, device: PushDevice): Promise<Set<string>> {
-  const rows = await all<{ key: string }>(
-    db,
-    `SELECT key FROM selfhost_push_sent WHERE device_id = ? AND kind = 'review'`,
-    device.id,
-  );
-  return notifiedIds(rows.map((r) => r.key));
+/** Forwarding problems and waiting forwarding codes from the last few days. */
+export async function loadInboxEvents(db: D1Database, now: Date): Promise<InboxEvent[]> {
+  const since = new Date(now.getTime() - NOTIFY_LOOKBACK_DAYS * 86_400_000).toISOString();
+  const [log, codes] = await Promise.all([
+    all<{ id: string; received_at: string; outcome: string; reason: string | null }>(
+      db,
+      `SELECT id, received_at, outcome, reason FROM inbox_log
+       WHERE received_at >= ? AND outcome IN ('rejected', 'failed')`,
+      since,
+    ),
+    all<{ id: string; received_at: string; provider: string; code: string | null }>(
+      db,
+      `SELECT id, received_at, provider, code FROM inbox_verifications
+       WHERE dismissed_at IS NULL AND received_at >= ?`,
+      since,
+    ),
+  ]);
+  const out: InboxEvent[] = [];
+  for (const r of log) {
+    const problem = inboxProblem(r.outcome, r.reason);
+    if (problem) out.push({ id: r.id, at: r.received_at, problem });
+  }
+  for (const v of codes)
+    out.push({
+      id: v.id,
+      at: v.received_at,
+      problem: 'verification',
+      provider: v.provider,
+      code: !!v.code,
+    });
+  return out;
 }
 
-/** The notification a device could get now, and its badge count. */
+const MILESTONE_STATE = 'notify_milestone_state';
+
+/**
+ * Looks at Home's Reimbursable total and moves the milestone along (see milestoneStep). Only
+ * the run that changes the stored state wins, so two runs at once can't start two crossings.
+ */
+async function milestone(db: D1Database, totalCents: number, now: Date): Promise<MilestoneState> {
+  const [raw, settings] = await Promise.all([getSetting(db, MILESTONE_STATE), loadSettings(db)]);
+  let prev: MilestoneState | null;
+  try {
+    prev = raw ? (JSON.parse(raw) as MilestoneState) : null;
+  } catch {
+    prev = null;
+  }
+  const next = milestoneStep(prev, totalCents, settings.notify_milestone_cents, now);
+  if (raw && JSON.stringify(next) === raw) return next;
+  const value = JSON.stringify(next);
+  const res = raw
+    ? await db
+        .prepare('UPDATE settings SET value = ? WHERE key = ? AND value = ?')
+        .bind(value, MILESTONE_STATE, raw)
+        .run()
+    : await db
+        .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT DO NOTHING')
+        .bind(MILESTONE_STATE, value)
+        .run();
+  if (res.meta.changes) return next;
+  // Another run got there first: use what it stored.
+  const won = await getSetting(db, MILESTONE_STATE);
+  return won ? (JSON.parse(won) as MilestoneState) : next;
+}
+
+/** What this device has been sent (the kit's sent log; see the README). */
+async function sentLog(db: D1Database, device: PushDevice) {
+  return all<{ kind: string; key: string; date: string }>(
+    db,
+    `SELECT kind, key, date FROM selfhost_push_sent WHERE device_id = ?`,
+    device.id,
+  );
+}
+
+const candidate = (n: Notice): PushCandidate => ({
+  kind: n.kind,
+  key: n.key,
+  message: { title: n.title, body: n.body, url: n.url, tag: n.tag },
+});
+
+/** The notifications a device could get now, and its badge count. */
 export function hsaPush(db: D1Database): Pick<PushJobOptions, 'build' | 'badge'> {
-  // Loaded once per run (or request), not once per device.
+  // Each loaded once per run (or request), not once per device, and only if a device wants it.
   let docs: Promise<ReviewDoc[]> | null = null;
-  const load = () => (docs ??= loadReviewDocs(db));
+  let ledger: Promise<LedgerEntry[]> | null = null;
+  let inbox: Promise<InboxEvent[]> | null = null;
+  let mile: Promise<{ state: MilestoneState; total: number }> | null = null;
+  const loadDocs = () => (docs ??= loadReviewDocs(db));
+  const loadAll = () => (ledger ??= loadLedger(db));
+  const loadInbox = (now: Date) => (inbox ??= loadInboxEvents(db, now));
+  const loadMilestone = (now: Date) =>
+    (mile ??= loadAll().then(async (l) => {
+      // Home's Reimbursable: summarize() over the same ledger the Home screen reads.
+      const total = summarize(l, 'service_date').all.outstanding_cents;
+      return { state: await milestone(db, total, now), total };
+    }));
+
   return {
     async build(device, now) {
-      const pending = pendingReview(await load(), {
-        notified: await notifiedFor(db, device),
-        deviceSince: device.created_at,
-        now,
-      });
-      const n = reviewNotice(pending);
-      return n
-        ? [
-            {
-              kind: n.kind,
-              key: n.key,
-              message: { title: n.title, body: n.body, url: n.url, tag: n.tag },
-            },
-          ]
-        : [];
+      const out: Notice[] = [];
+      const log = await sentLog(db, device);
+      const keys = (kind: string) => log.filter((r) => r.kind === kind).map((r) => r.key);
+      const today = localDay(now, device.tz);
+      const since = device.created_at;
+
+      if (wants(device, 'review') || wants(device, 'failed')) {
+        const d = await loadDocs();
+        const review = pendingReview(
+          d.filter((x) => !x.failed),
+          { notified: notifiedIds(keys('review')), deviceSince: since, now },
+        );
+        // A document already announced as Needs review (before this kind existed) isn't repeated.
+        const failed = pendingReview(
+          d.filter((x) => x.failed),
+          {
+            notified: notifiedIds([...keys('failed'), ...keys('review')]),
+            deviceSince: since,
+            now,
+          },
+        );
+        const r = wants(device, 'review') && reviewNotice(review);
+        const f = wants(device, 'failed') && failedNotice(failed);
+        if (r) out.push(r);
+        if (f) out.push(f);
+      }
+
+      if (wants(device, 'milestone')) {
+        const m = await loadMilestone(now);
+        const n = milestoneNotice(m.state, {
+          totalCents: m.total,
+          sentKeys: new Set(keys('milestone')),
+          deviceSince: since,
+          now,
+        });
+        if (n) out.push(n);
+      }
+
+      if (wants(device, 'year_end') && today.slice(5) === '12-01') {
+        const n = yearEndNotice(today, summarize(await loadAll(), 'service_date').years);
+        if (n) out.push(n);
+      }
+
+      if (wants(device, 'weekly') && weekday(today) === 0) {
+        const n = weeklyNotice(await loadAll(), { now, tz: device.tz });
+        if (n) out.push(n);
+      }
+
+      if (wants(device, 'inbox')) {
+        const sentToday = new Set(
+          log
+            .filter((r) => r.kind === 'inbox' && r.date === today)
+            .map((r) => inboxKeyProblem(r.key)),
+        );
+        const pending = pendingInbox(await loadInbox(now), {
+          notified: notifiedIds(keys('inbox')),
+          sentToday,
+          deviceSince: since,
+          now,
+        });
+        out.push(...inboxNotices(pending, { now, tz: device.tz }));
+      }
+
+      return out.map(candidate);
     },
     async badge() {
-      return (await load()).length;
+      return (await loadDocs()).length;
     },
   };
 }
@@ -117,9 +274,10 @@ export function runNotifications(db: D1Database, o: Partial<PushJobOptions> = {}
 }
 
 /**
- * After a document is read: notify now, unless more documents are being read or are queued,
- * so a batch (an email with several attachments, a multi-file upload, a sweep) becomes one
- * notification sent when the last one finishes. The cron catches anything left over.
+ * After a document is read, or the inbox records a problem: notify now, unless more documents
+ * are being read or are queued, so a batch (an email with several attachments, a multi-file
+ * upload, a sweep) becomes one notification sent when the last one finishes. The cron catches
+ * anything left over.
  */
 export async function notifyWhenIdle(db: D1Database, o: Partial<PushJobOptions> = {}) {
   try {

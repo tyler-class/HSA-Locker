@@ -1,6 +1,6 @@
 // Settings → Notifications: this device's own choices (Selfhost Kit layout and words).
-import { useEffect, useState } from 'react';
-import { BADGE_MEANS, NOTIFY_KINDS } from '@shared/logic';
+import { Fragment, useEffect, useState } from 'react';
+import { BADGE_MEANS, MILESTONE_DEFAULT_CENTS, NOTIFY_KINDS } from '@shared/logic';
 import {
   disablePush,
   enablePush,
@@ -13,9 +13,11 @@ import {
   setPrefs,
   type PushState,
 } from '../kit/push';
-import { ErrorText, GhostButton, InfoTip, SectionLabel, Switch } from '../components/ui';
+import { ErrorText, GhostButton, InfoTip, SectionLabel, Switch, TextInput } from '../components/ui';
 import { useToast } from '../components/Toast';
-import { errorMessage } from '../lib/api';
+import { api, errorMessage } from '../lib/api';
+import { useAppState } from '../lib/queries';
+import { useSave } from '../lib/useSave';
 
 const KINDS = NOTIFY_KINDS.map((k) => k.id);
 
@@ -23,7 +25,9 @@ const KINDS = NOTIFY_KINDS.map((k) => k.id);
 const KIT_INFO = pushInfo({ badge: BADGE_MEANS }).lines.filter((t) => !t.startsWith('Daily ones'));
 const INFO = [
   KIT_INFO[0]!,
-  'Each document that needs a look is sent once, soon after it’s read. From 9 p.m. to 8 a.m. they wait until 8 a.m. and arrive together.',
+  'Needs review and Couldn’t read a document come once per document, soon after it’s read. Email inbox problems come once a day per problem. From 9 p.m. to 8 a.m. they wait until 8 a.m. and arrive together.',
+  'Reimbursable milestone comes when Reimbursable reaches your amount, and again after it drops below and climbs back. The amount is the same on every device.',
+  'Year-end comes on December 1 and the Weekly summary on Sundays, both at 8 a.m.',
   ...KIT_INFO.slice(1),
   'Prefer email? The Daily reminder email above is another option. Use either, both or neither.',
 ];
@@ -135,31 +139,36 @@ export function NotificationsSection() {
             </div>
             {on &&
               NOTIFY_KINDS.map((k) => (
-                <div key={k.id} className="flex items-center gap-3 border-t border-line pt-3">
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="text-ink">{k.label}</span>
-                    <span className="text-xs text-faint">{k.description}</span>
-                  </span>
-                  <Switch
-                    on={state.device?.prefs[k.id] !== false}
-                    label={k.label}
-                    onChange={(v) =>
-                      act(async () => {
-                        // Show it now; the server agrees or the error says why.
-                        setState((s) =>
-                          s?.device
-                            ? {
-                                ...s,
-                                device: { ...s.device, prefs: { ...s.device.prefs, [k.id]: v } },
-                              }
-                            : s,
-                        );
-                        const device = await setPrefs({ [k.id]: v });
-                        if (device) setState((s) => s && { ...s, device });
-                      })
-                    }
-                  />
-                </div>
+                <Fragment key={k.id}>
+                  <div className="flex items-center gap-3 border-t border-line pt-3">
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="text-ink">{k.label}</span>
+                      <span className="text-xs text-faint">{k.description}</span>
+                    </span>
+                    <Switch
+                      on={state.device?.prefs[k.id] !== false}
+                      label={k.label}
+                      onChange={(v) =>
+                        act(async () => {
+                          // Show it now; the server agrees or the error says why.
+                          setState((s) =>
+                            s?.device
+                              ? {
+                                  ...s,
+                                  device: { ...s.device, prefs: { ...s.device.prefs, [k.id]: v } },
+                                }
+                              : s,
+                          );
+                          const device = await setPrefs({ [k.id]: v });
+                          if (device) setState((s) => s && { ...s, device });
+                        })
+                      }
+                    />
+                  </div>
+                  {k.id === 'milestone' && state.device?.prefs.milestone !== false && (
+                    <MilestoneAmount />
+                  )}
+                </Fragment>
               ))}
             {on && (
               <div className="border-t border-line pt-2">
@@ -183,5 +192,49 @@ export function NotificationsSection() {
         <ErrorText>{error}</ErrorText>
       </div>
     </>
+  );
+}
+
+/** "Notify me at $500": the Reimbursable milestone's amount (an app setting, shared by devices). */
+function MilestoneAmount() {
+  const { data: app } = useAppState();
+  const { run, busy, error } = useSave();
+  const saved = app?.settings.notify_milestone_cents ?? MILESTONE_DEFAULT_CENTS;
+  // What's typed, until it's saved (null: show the saved amount).
+  const [draft, setDraft] = useState<string | null>(null);
+  const save = async () => {
+    if (draft === null) return;
+    const dollars = Number(draft.replace(/[$,\s]/g, ''));
+    if (
+      Number.isInteger(dollars) &&
+      dollars >= 1 &&
+      dollars <= 1_000_000 &&
+      dollars * 100 !== saved
+    )
+      await run(() => api.patch('/settings', { notify_milestone_cents: dollars * 100 }));
+    setDraft(null);
+  };
+  return (
+    <div className="-mt-1 flex flex-col gap-1">
+      <label className="flex items-center gap-2">
+        <span className="text-soft">Notify me at</span>
+        <span className="relative w-28">
+          <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint">
+            $
+          </span>
+          <TextInput
+            inputMode="numeric"
+            aria-label="Reimbursable milestone amount in dollars"
+            className="py-1.5 pl-6 tnum"
+            disabled={busy}
+            value={draft ?? String(saved / 100)}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => void save()}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          />
+        </span>
+      </label>
+      <ErrorText>{error}</ErrorText>
+    </div>
   );
 }

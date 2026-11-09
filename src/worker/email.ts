@@ -3,10 +3,11 @@
 // (postal-mime), verification detection and creating documents happen afterwards in
 // processInboxMessage, kicked with waitUntil and retried by the cron sweeper.
 import PostalMime, { type Email } from 'postal-mime';
-import { detectVerification, keepPart, mimeFromName } from '@shared/logic';
+import { detectVerification, inboxProblem, keepPart, mimeFromName } from '@shared/logic';
 import { all, first, getInboxToken, loadSettings, newId, nowIso } from './db';
 import { processDocument } from './extract/pipeline';
 import { htmlToText } from './extract/text';
+import { notifyWhenIdle } from './notifications';
 import { cleanFilename, storeDocument } from './store';
 
 /** Cloudflare Email Routing's own limit is 25 MiB. */
@@ -75,6 +76,8 @@ export async function handleEmail(
   const reject = async (reason: string, smtp: string) => {
     await logInbox(db, { to, from, subject, outcome: 'rejected', reason, size: message.rawSize });
     message.setReject(smtp);
+    // An Email inbox problem push (daily limit, too large, sender not allowed), once the reply's out.
+    if (inboxProblem('rejected', reason)) ctx.waitUntil(notifyWhenIdle(db));
   };
 
   // The unguessable token is the gate; a catch-all is never relied on.
@@ -120,6 +123,7 @@ export async function handleEmail(
       .prepare("UPDATE inbox_log SET outcome = 'failed', reason = 'store_failed' WHERE id = ?")
       .bind(id)
       .run();
+    ctx.waitUntil(notifyWhenIdle(db));
     throw e;
   }
   ctx.waitUntil(processInboxMessage(env, id).catch(() => {}));
@@ -234,7 +238,9 @@ export async function processInboxMessage(env: Cloudflare.Env, logId: string): P
           verification.link,
         )
         .run();
-      return void (await finish('verification', verification.provider));
+      await finish('verification', verification.provider);
+      // "Gmail sent a forwarding code": an Email inbox problem push.
+      return void (await notifyWhenIdle(db));
     }
 
     const { parts, bodies } = await collectParts(email);
@@ -320,7 +326,10 @@ export async function processInboxMessage(env: Cloudflare.Env, logId: string): P
   } catch (e) {
     const code = e instanceof Error ? e.name : 'error';
     console.warn(`inbox ${logId}: parse attempt ${claimed.attempts} failed (${code})`);
-    if (claimed.attempts >= MAX_PARSE_ATTEMPTS) await finish('failed', 'parse_failed');
+    if (claimed.attempts >= MAX_PARSE_ATTEMPTS) {
+      await finish('failed', 'parse_failed');
+      await notifyWhenIdle(db);
+    }
   }
 }
 

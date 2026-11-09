@@ -148,6 +148,8 @@ export interface Settings {
   /** Where the daily review reminder goes (verified in Email Routing → Destination Addresses). */
   notify_email: string | null;
   notify_daily: boolean;
+  /** Push: the Reimbursable milestone, in cents (one amount for the household). */
+  notify_milestone_cents: number;
 }
 
 export interface AiInfo {

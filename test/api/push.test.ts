@@ -1,7 +1,9 @@
 // Push notifications in workerd: the Selfhost Kit's crypto (RFC 8291 / RFC 8292), its timing,
-// the /api/push routes, and HSA Locker's "Needs review" end to end (reading a document triggers
-// it, once per document, held overnight, batched, with the Review count as the badge).
-import { SELF } from 'cloudflare:test';
+// the /api/push routes, and HSA Locker's kinds end to end: "Needs review" (reading a document
+// triggers it, once per document, held overnight, batched, with the Review count as the badge),
+// "Couldn't read a document", the Reimbursable milestone, Year-end, the Weekly summary and
+// Email inbox problems.
+import { createExecutionContext, SELF, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -16,6 +18,7 @@ import {
   vapidKeys,
   type PushDevice,
 } from '../../src/worker/kit/push';
+import worker from '../../src/worker/index';
 import { processDocument } from '../../src/worker/extract/pipeline';
 import { runNotifications } from '../../src/worker/notifications';
 import { storeDocument } from '../../src/worker/store';
@@ -95,7 +98,17 @@ function pushService(status = 201) {
   return { got, fetcher };
 }
 
-async function device(tz: string, prefs: Record<string, boolean> = {}) {
+/** Every kind but Needs review off, so each test hears only the kinds it switches on. */
+const ONLY_REVIEW = {
+  failed: false,
+  milestone: false,
+  year_end: false,
+  inbox: false,
+  weekly: false,
+};
+const NONE = { review: false, ...ONLY_REVIEW };
+
+async function device(tz: string, prefs: Record<string, boolean> = ONLY_REVIEW) {
   const b = await browser();
   const d = await saveDevice(env.DB, {
     subscription: {
@@ -326,7 +339,7 @@ describe('Needs review', () => {
 
   it('skips devices with Needs review switched off', async () => {
     await clearDevices();
-    await device('UTC', { review: false });
+    await device('UTC', NONE);
     const id = await receipt('switched-off');
     await processDocument(env, id);
     await env.DB.prepare('UPDATE documents SET processed_at = ? WHERE id = ?')
@@ -373,7 +386,16 @@ describe('/api/push', () => {
       endpoint,
       prefs: { review: false },
     });
-    expect(p.data.device.prefs).toEqual({ enabled: true, review: false });
+    // Every other kind is on by default.
+    expect(p.data.device.prefs).toEqual({
+      enabled: true,
+      review: false,
+      failed: true,
+      milestone: true,
+      year_end: true,
+      inbox: true,
+      weekly: true,
+    });
     await api.patch('/push/prefs', { endpoint, prefs: { review: true } });
 
     const sent = spyPush();
@@ -397,5 +419,230 @@ describe('/api/push', () => {
     expect((await api.post('/push/unsubscribe', { endpoint })).data).toEqual({ ok: true });
     expect((await api.post('/push/device', { endpoint })).data).toEqual({ device: null });
     expect((await api.post('/push/test', { endpoint })).status).toBe(404);
+  });
+});
+
+/** Home's numbers (/api/summary). */
+async function home() {
+  const api = await session();
+  return (
+    await api.get<{
+      totals: { outstanding_cents: number };
+      years: { year: number | null; outstanding_cents: number }[];
+    }>('/summary')
+  ).data;
+}
+
+/** A receipt that counts as Reimbursable: read, then its review reasons cleared. */
+async function reimbursable(label: string, p: { service_date?: string; created_at?: string } = {}) {
+  const id = await receipt(label);
+  await processDocument(env, id);
+  await env.DB.prepare(
+    `UPDATE entries SET review_reasons_json = '[]', service_date = COALESCE(?, service_date),
+       created_at = COALESCE(?, created_at) WHERE document_id = ?`,
+  )
+    .bind(p.service_date ?? null, p.created_at ?? null, id)
+    .run();
+  return id;
+}
+
+describe('Couldn’t read a document', () => {
+  it('a document reading gives up on is its own notification, not Needs review', async () => {
+    await clearDevices();
+    const { b } = await device(noonZone(), { ...NONE, review: true, failed: true });
+    const r = await storeDocument(env, {
+      bytes: new TextEncoder().encode(fakePdf('FAKE_FAIL statement', receiptExtraction())),
+      filename: 'statement.pdf',
+      mime: 'application/pdf',
+      source: 'upload',
+    });
+    if (!r.ok) throw new Error('duplicate');
+    // Its last attempt.
+    await env.DB.prepare('UPDATE documents SET attempts = 4 WHERE id = ?').bind(r.id).run();
+    const sent = spyPush();
+    expect(await processDocument(env, r.id)).toBe('needs_review');
+    expect(sent).toHaveLength(1);
+    expect(await decrypt(b, sent[0]!.body)).toMatchObject({
+      title: 'Couldn’t read a document',
+      body: 'Couldn’t read statement.pdf.',
+      url: `/review/${r.id}`,
+    });
+    await runNotifications(env.DB);
+    expect(sent).toHaveLength(1);
+  });
+});
+
+describe('Reimbursable milestone', () => {
+  it('once per crossing at the amount set in Settings, again after dropping below', async () => {
+    await clearDevices();
+    const api = await session();
+    const { b } = await device(noonZone(), { ...NONE, milestone: true });
+    const total = (await home()).totals.outstanding_cents;
+    const amount = Math.floor(total / 100) * 100 + 100; // just above today's total
+    expect((await api.patch('/settings', { notify_milestone_cents: amount })).status).toBe(200);
+    expect((await api.patch('/settings', { notify_milestone_cents: 12_345 })).status).toBe(400);
+
+    const sent = spyPush();
+    await runNotifications(env.DB); // below: nothing
+    expect(sent).toHaveLength(0);
+
+    const id = await reimbursable('milestone-1');
+    await runNotifications(env.DB);
+    expect(sent).toHaveLength(1);
+    const now = (await home()).totals.outstanding_cents;
+    expect(now).toBeGreaterThanOrEqual(amount);
+    expect(await decrypt(b, sent[0]!.body)).toMatchObject({
+      title: 'Reimbursable',
+      body: `You have $${(now / 100).toFixed(2).replace(/\.00$/, '')} reimbursable. Time to pay yourself back?`,
+      url: '/ledger?status=outstanding',
+    });
+    await runNotifications(env.DB); // still above: not again
+    expect(sent).toHaveLength(1);
+
+    // Paid back (here: marked paid with the HSA card): below again, which re-arms it.
+    await env.DB.prepare(
+      `UPDATE entries SET excluded_reason = 'paid_with_hsa' WHERE document_id = ?`,
+    )
+      .bind(id)
+      .run();
+    await runNotifications(env.DB);
+    expect(sent).toHaveLength(1);
+    await env.DB.prepare(`UPDATE entries SET excluded_reason = NULL WHERE document_id = ?`)
+      .bind(id)
+      .run();
+    // A new crossing needs a new instant (the key is when it crossed).
+    await new Promise((r) => setTimeout(r, 5));
+    await runNotifications(env.DB);
+    expect(sent).toHaveLength(2);
+  });
+});
+
+describe('Year-end and Weekly summary', () => {
+  it('December 1 at 8 a.m.: what’s reimbursable from that year, once', async () => {
+    await clearDevices();
+    const { b, d } = await device('America/New_York', { ...NONE, year_end: true });
+    await env.DB.prepare('UPDATE selfhost_push_devices SET created_at = ? WHERE id = ?')
+      .bind('2030-01-01T00:00:00.000Z', d.id)
+      .run();
+    await reimbursable('year-end-1', { service_date: '2030-06-01' });
+    await reimbursable('year-end-2', { service_date: '2030-09-15' });
+    const cents = (await home()).years.find((y) => y.year === 2030)!.outstanding_cents;
+    expect(cents).toBe(9_000);
+    const svc = pushService();
+    const run = (iso: string) =>
+      runNotifications(env.DB, { now: new Date(iso), fetcher: svc.fetcher });
+    await run('2030-11-30T15:00:00Z');
+    await run('2030-12-01T12:50:00Z'); // 7:50 EST
+    expect(svc.got).toHaveLength(0);
+    await run('2030-12-01T13:00:00Z'); // 8:00
+    await run('2030-12-01T18:00:00Z');
+    await run('2030-12-02T13:00:00Z');
+    expect(svc.got).toHaveLength(1);
+    expect(await decrypt(b, svc.got[0]!.body)).toMatchObject({
+      title: 'Year-end',
+      body: 'You have $90 reimbursable from 2030.',
+      url: '/ledger?year=2030&status=outstanding',
+    });
+    // Nothing reimbursable from 2031: no notification.
+    await run('2031-12-01T13:00:00Z');
+    expect(svc.got).toHaveLength(1);
+  });
+
+  it('Sunday at 8 a.m.: the week’s receipts, skipping empty weeks', async () => {
+    await clearDevices();
+    const { b } = await device('America/New_York', { ...NONE, weekly: true });
+    await reimbursable('week-1', { created_at: '2031-01-07T15:00:00.000Z' });
+    await reimbursable('week-2', { created_at: '2031-01-10T15:00:00.000Z' });
+    const svc = pushService();
+    const run = (iso: string) =>
+      runNotifications(env.DB, { now: new Date(iso), fetcher: svc.fetcher });
+    await run('2031-01-11T15:00:00Z'); // Saturday
+    await run('2031-01-12T12:50:00Z'); // Sunday 7:50
+    expect(svc.got).toHaveLength(0);
+    await run('2031-01-12T13:00:00Z'); // Sunday 8:00
+    await run('2031-01-12T16:00:00Z');
+    expect(svc.got).toHaveLength(1);
+    expect(await decrypt(b, svc.got[0]!.body)).toMatchObject({
+      title: 'Weekly summary',
+      body: 'This week: 2 receipts added, $90.',
+      url: '/ledger?sort=added_desc',
+    });
+    await run('2031-01-19T13:00:00Z'); // nothing added that week
+    expect(svc.got).toHaveLength(1);
+  });
+});
+
+describe('Email inbox problem', () => {
+  async function deliver(
+    to: string,
+    from = 'billing@clinic.example',
+    subject = 'Receipt',
+    text = 'See attached.',
+    rawSize?: number,
+  ) {
+    const raw = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      text,
+      '',
+    ].join('\r\n');
+    const bytes = new TextEncoder().encode(raw);
+    let rejected: string | null = null;
+    const message = {
+      from,
+      to,
+      headers: new Headers({ subject }),
+      raw: new Blob([bytes]).stream(),
+      rawSize: rawSize ?? bytes.byteLength,
+      setReject: (r: string) => (rejected = r),
+    };
+    const ctx = createExecutionContext();
+    await worker.email(message as never, env, ctx);
+    await waitOnExecutionContext(ctx);
+    return rejected;
+  }
+
+  it('sends promptly, once a day per problem, with a forwarding code on its own', async () => {
+    await clearDevices();
+    const api = await session();
+    const { b } = await device(noonZone(), { ...NONE, inbox: true });
+    const s = await api.patch<{ inbox_address: string }>('/settings', {
+      inbox_domain: 'hsa-in.example.com',
+      inbox_max_mb: 1,
+    });
+    const to = s.data.inbox_address;
+    const sent = spyPush();
+
+    expect(await deliver('nobody@hsa-in.example.com')).toBe('unknown recipient'); // spam: quiet
+    expect(sent).toHaveLength(0);
+
+    expect(await deliver(to, undefined, 'Big', 'x', 2 * 1024 * 1024)).toBe('message too large');
+    expect(sent).toHaveLength(1);
+    expect(await decrypt(b, sent[0]!.body)).toMatchObject({
+      title: 'Email inbox',
+      body: 'An email was rejected today: too large.',
+      url: '/settings/inbox',
+    });
+    await deliver(to, undefined, 'Big again', 'x', 2 * 1024 * 1024);
+    expect(sent).toHaveLength(1); // once a day for this problem
+
+    await deliver(
+      to,
+      'forwarding-noreply@google.com',
+      '(#987654321) Gmail Forwarding Confirmation - Receive Mail from sam@example.com',
+      'Confirmation code: 987654321',
+    );
+    expect(sent).toHaveLength(2);
+    expect(await decrypt(b, sent[1]!.body)).toMatchObject({
+      body: 'Gmail sent a forwarding code. Enter it in Gmail to finish setup.',
+      url: '/settings/inbox',
+    });
+    await runNotifications(env.DB);
+    expect(sent).toHaveLength(2);
+    await api.patch('/settings', { inbox_max_mb: 20 });
   });
 });

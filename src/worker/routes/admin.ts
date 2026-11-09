@@ -123,6 +123,8 @@ admin.patch('/settings', async (c) => {
   if (input.onboarded !== undefined) set('onboarded', input.onboarded ? '1' : '0');
   if (input.notify_email !== undefined) set('notify_email', input.notify_email ?? '');
   if (input.notify_daily !== undefined) set('notify_daily', input.notify_daily ? '1' : '0');
+  if (input.notify_milestone_cents !== undefined)
+    set('notify_milestone_cents', String(input.notify_milestone_cents));
   if (stmts.length) await db.batch(stmts);
   if (input.telemetry !== undefined || input.updates_set_up !== undefined)
     await setKitState(db, { telemetry: input.telemetry, updates_set_up: input.updates_set_up });

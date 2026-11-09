@@ -77,6 +77,14 @@ export const settingsPatch = z.object({
     .nullable()
     .optional(),
   notify_daily: z.boolean().optional(),
+  /** Push: the Reimbursable milestone, whole dollars in cents ($1 to $1,000,000). */
+  notify_milestone_cents: z
+    .number()
+    .int()
+    .min(100)
+    .max(100_000_000)
+    .refine((c) => c % 100 === 0, 'Use whole dollars.')
+    .optional(),
   /** Selfhost Kit: send the anonymous daily check-in (counts only). */
   telemetry: z.boolean().optional(),
   /** Selfhost Kit: the update workflow was added to this copy's GitHub repo. */

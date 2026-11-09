@@ -1,4 +1,5 @@
 import { INBOX_DEFAULTS } from '@shared/lookups';
+import { MILESTONE_DEFAULT_CENTS } from '@shared/logic';
 import type {
   Category,
   DocumentSummary,
@@ -268,5 +269,6 @@ export async function loadSettings(db: D1Database): Promise<Settings> {
     onboarded: m.get('onboarded') === '1',
     notify_email: m.get('notify_email') || null,
     notify_daily: m.get('notify_daily') === '1',
+    notify_milestone_cents: num(m.get('notify_milestone_cents'), MILESTONE_DEFAULT_CENTS),
   };
 }
