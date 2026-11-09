@@ -12,6 +12,7 @@ import { sweep } from './extract/pipeline';
 import { mcpApiHandler } from './mcp';
 import { sendReminder } from './notify';
 import { checkIn } from './kit/telemetry';
+import { buildFlags } from '../shared/kit/build';
 import pkg from '../../package.json';
 
 /** Tables whose row counts go in the anonymous daily check-in (counts only, never contents). */
@@ -104,6 +105,7 @@ export default {
         version: pkg.version,
         tables: USAGE_TABLES,
         buckets: [env.FILES],
+        build: buildFlags(),
       }),
     );
     try {

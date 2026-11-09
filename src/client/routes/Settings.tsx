@@ -32,6 +32,7 @@ import { howUpdatesWork, UPDATE_TEXT, updateStatus, whatsShared } from '../kit/u
 /** What the usage counts count, in words (matches USAGE_TABLES in the worker). */
 const USAGE_COUNTED = 'documents, entries and reimbursements';
 import { ConnectAISection } from './ConnectAI';
+import { buildFlags } from '@shared/kit/build';
 import { CategoriesEditor, PeopleEditor, ProvidersEditor } from './SettingsLists';
 
 function Row({
@@ -391,7 +392,7 @@ export function Settings() {
       </div>
 
       <UpdatesSection
-        setUp={state.kit.updates_set_up}
+        setUp={buildFlags().updatesOn || state.kit.updates_set_up}
         onSetUp={() => run(() => api.patch('/settings', { updates_set_up: true }))}
         telemetry={state.kit.telemetry}
         onTelemetry={(telemetry) => run(() => api.patch('/settings', { telemetry }))}
