@@ -71,6 +71,10 @@ export const settingsPatch = z.object({
     .nullable()
     .optional(),
   notify_daily: z.boolean().optional(),
+  /** Selfhost Kit: send the anonymous daily check-in (counts only). */
+  telemetry: z.boolean().optional(),
+  /** Selfhost Kit: the update workflow was added to this copy's GitHub repo. */
+  updates_set_up: z.boolean().optional(),
 });
 
 export const entryFields = z.object({

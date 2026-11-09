@@ -45,6 +45,7 @@ import { rememberOrigin, sendReminder } from '../notify';
 import sample from '../../../seed/sample.json';
 import { refreshDocs } from '../status';
 import { ApiError, body, notFound, type AppEnv } from './util';
+import { kitState, setKitState } from '../kit/telemetry';
 
 export const admin = new Hono<AppEnv>();
 
@@ -56,7 +57,7 @@ admin.get('/state', async (c) => {
   } catch {
     /* no execution context */
   }
-  const [settings, people, providers, categories, counts] = await Promise.all([
+  const [settings, people, providers, categories, counts, kit] = await Promise.all([
     loadSettings(db),
     loadPeople(db),
     loadProviders(db),
@@ -72,6 +73,7 @@ admin.get('/state', async (c) => {
         (SELECT COUNT(*) FROM documents WHERE status = 'failed') AS failed,
         (SELECT COUNT(*) FROM documents WHERE status != 'discarded') AS documents`,
     ),
+    kitState(db),
   ]);
   const p = getProvider(c.env);
   const state: AppState = {
@@ -93,6 +95,7 @@ admin.get('/state', async (c) => {
       third_party: p.thirdParty,
       gateway: c.env.AI_GATEWAY_ID || c.env.AI_GATEWAY_URL ? 'on' : null,
     },
+    kit: { updates_set_up: kit.updates_set_up, telemetry: kit.telemetry },
   };
   return c.json(state);
 });
@@ -118,6 +121,8 @@ admin.patch('/settings', async (c) => {
   if (input.notify_email !== undefined) set('notify_email', input.notify_email ?? '');
   if (input.notify_daily !== undefined) set('notify_daily', input.notify_daily ? '1' : '0');
   if (stmts.length) await db.batch(stmts);
+  if (input.telemetry !== undefined || input.updates_set_up !== undefined)
+    await setKitState(db, { telemetry: input.telemetry, updates_set_up: input.updates_set_up });
 
   // A changed card list re-applies paid_with_hsa to receipts (automatic exclusions only).
   if (input.hsa_cards) {

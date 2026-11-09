@@ -1,0 +1,6 @@
+{
+  "app": "hsa-locker",
+  "title": "HSA Locker",
+  "upstream": "tyler-class/HSA-Locker",
+  "dataNote": "Your data lives in the database and file storage, not here, so it isn't touched."
+}

@@ -21,7 +21,7 @@ This is the shared setup behind HSA Locker, Duffel, Ratio and Nitrogen: self-hos
 
 The README's button links to `https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/<App>`. When someone clicks it, Cloudflare:
 
-1. **Copies the repo** into their GitHub (or GitLab) account. It's a plain copy, not a fork, so GitHub's "Sync fork" doesn't exist for it.
+1. **Copies the repo** into their GitHub (or GitLab) account. It's a plain copy, not a fork, so GitHub's "Sync fork" doesn't exist for it. It **leaves out `.github/workflows`** (confirmed on a test install), so the update workflow isn't in the copy until the user adds it (step 3).
 2. **Creates the resources** in their Cloudflare account from `wrangler.jsonc`: D1, R2, KV, the Workers AI binding and cron triggers. `wrangler.jsonc` has **no ids** (no `database_id`, no `bucket_name`) so nothing points at your resources.
 3. **Asks for secrets.** It lists the names in `.dev.vars.example` (for example `APP_PASSWORD`), with the help text from `package.json` → `cloudflare.bindings`.
 4. **Connects Workers Builds** to their copy's `main` branch, and runs the first build and deploy.
@@ -66,9 +66,9 @@ For a project whose `deploy` script is `wrangler deploy && wrangler d1 migration
 
 ### 3. The weekly update workflow
 
-`.github/workflows/update.yml` ships inside every copy. It:
+`.github/workflows/update.yml` comes from the Selfhost Kit (`tyler-class/selfhost-kit`, synced with `sync.mjs`). The button leaves it out, so **Settings → Updates → Set up automatic updates** opens GitHub's new-file page in the user's own copy with the workflow filled in; one **Commit changes** adds it. The app knows the copy's repo because the build reads `git remote` (Workers Builds checks out the copy) and passes it to the client as `__SOURCE_REPO__`. The workflow:
 
-- runs **every Monday** on a schedule, and any time from **Actions → Update <App> → Run workflow**;
+- runs **every Monday** on a schedule, **once when the file is added**, and any time from **Actions → Update <App> → Run workflow** (Settings → **Update now** links there);
 - **skips itself in the source repo** (`if: github.repository != 'tyler-class/<App>'`);
 - fetches the source repo's `main`, replaces the copy's files with it, and commits **only if something changed**. That push triggers Workers Builds, which migrates and deploys;
 - **keeps** two things from the copy: its `.github/workflows` (see the limits below) and a `wrangler.jsonc` that has a `database_id` written in (from a hand install);
@@ -105,14 +105,7 @@ From then on, a push to `main` is a deploy. Treat it that way.
 
 ## The four projects
 
-| Project    | Deploy script                        | update.yml | Keep-alive | Notes                                                                            |
-| ---------- | ------------------------------------ | ---------- | ---------- | -------------------------------------------------------------------------------- |
-| HSA Locker | build → `release.ts` (migrate first) | yes        | yes        | Reference implementation.                                                        |
-| Duffel     | build → `release.ts` (migrate first) | yes        | **no**     | Add the keep-alive step and `actions: write`. Existing copies need it pasted in. |
-| Ratio      | build → deploy → migrate             | **no**     | **no**     | Add `scripts/release.ts`, `release` script and `update.yml`.                     |
-| Nitrogen   | build → deploy → migrate             | **no**     | **no**     | Same as Ratio. Remember `src/shared/version.ts`.                                 |
-
-To bring a project in line: copy `scripts/release.ts`, set `"deploy": "npm run build && npm run release"` and `"release": "tsx scripts/release.ts"`, copy `.github/workflows/update.yml` with the repo name and app name replaced, and make sure `wrangler.jsonc` has no resource ids.
+All four use the Selfhost Kit for `scripts/release.ts`, `update.yml`, Settings → Updates and the anonymous usage check-in (see the kit's README for the standard). Run `node sync.mjs <app> --check` in the kit before a release to confirm an app's copy is current.
 
 ## Verify once with a real install
 

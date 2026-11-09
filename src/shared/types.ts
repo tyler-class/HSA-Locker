@@ -151,6 +151,13 @@ export interface AppState {
     documents: number;
   };
   ai: AiInfo;
+  /** Selfhost Kit state: updates and the anonymous usage check-in. */
+  kit: {
+    /** Someone added the update workflow to this copy's GitHub repo (Settings → Updates). */
+    updates_set_up: boolean;
+    /** Send the anonymous daily check-in (counts only). */
+    telemetry: boolean;
+  };
 }
 
 export interface InboxLogRow {

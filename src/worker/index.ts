@@ -11,6 +11,19 @@ import { dueInboxMessages, handleEmail, processInboxMessage, type IncomingMessag
 import { sweep } from './extract/pipeline';
 import { mcpApiHandler } from './mcp';
 import { sendReminder } from './notify';
+import { checkIn } from './kit/telemetry';
+import pkg from '../../package.json';
+
+/** Tables whose row counts go in the anonymous daily check-in (counts only, never contents). */
+export const USAGE_TABLES = [
+  'people',
+  'providers',
+  'categories',
+  'documents',
+  'entries',
+  'reimbursements',
+  'inbox_log',
+];
 
 /** Headers on every API response. The app's pages get theirs (CSP included) from public/_headers. */
 const API_HEADERS: Record<string, string> = {
@@ -83,7 +96,16 @@ export default {
   },
 
   /** The work queue: unparsed mail first, then documents due for (re)processing. */
-  async scheduled(_event: ScheduledController, env: Cloudflare.Env) {
+  async scheduled(_event: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
+    // The anonymous check-in goes out at most once a day, and not at all if it's turned off.
+    ctx.waitUntil(
+      checkIn(env.DB, {
+        app: 'hsa-locker',
+        version: pkg.version,
+        tables: USAGE_TABLES,
+        buckets: [env.FILES],
+      }),
+    );
     try {
       for (const id of await dueInboxMessages(env.DB, 5)) await processInboxMessage(env, id);
       const n = await sweep(env, 5);
