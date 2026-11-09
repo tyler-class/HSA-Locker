@@ -26,6 +26,32 @@ Keep every medical receipt and EOB for your HSA in one place, and always know ho
 
 One deployment is one household. HSA Locker isn’t tax advice and makes no HIPAA compliance claims.
 
+## A look around
+
+**Ledger.** Every receipt and EOB line with its status; **Filters** narrows by year, type, person, category and provider; tap an entry to check or fix what was read.
+
+![The Ledger on a phone, the Filters sheet, and a receipt's details: date, patient, provider, amount, card and category](docs/screenshots/phone-ledger.png)
+
+**Documents.** **Upload** takes PDFs and photos (**Take photo** on a phone). The original opens beside its entry and zooms with a pinch; one that came by email keeps the email it came in.
+
+![Add receipts with Choose files and Take photo, a photographed pharmacy receipt zoomed in, and the original forwarded email with its attachment](docs/screenshots/phone-documents.png)
+
+**Review.** Anything that needs a look waits here with the reason, like a provider name that's close to one you have.
+
+![Review on a phone: a dental receipt, then its entry flagged because "Placeholder Dental Grp" may be "Placeholder Dental Group", with Same provider and It's a new provider](docs/screenshots/phone-review.png)
+
+**Reimbursements.** Select receipts, record the withdrawal, and see each reimbursement's receipts later.
+
+![Three reimbursable receipts selected, the Record reimbursement sheet with the total to withdraw, and a past reimbursement with its receipts and Undo](docs/screenshots/phone-reimburse.png)
+
+**Providers and categories.** Both fill in from your receipts. **Might be the same** asks whether a near-miss name is a provider you already have.
+
+![Settings → Providers with Might be the same at the top, and Settings → Categories with how many receipts use each](docs/screenshots/phone-lists.png)
+
+**People and HSA cards.** Spellings of a name match one person. Receipts paid with an HSA card you list are marked not claimable.
+
+![Settings → People with four people and the family last name, and Reimbursing with an HSA card ending 4242](docs/screenshots/settings-people.png)
+
 ## Before you install
 
 - **Enable R2 on your Cloudflare account.** File storage uses Cloudflare R2. Its free tier (10 GB) is plenty, but Cloudflare asks you to add R2 to your account (**Dashboard → R2**) with a payment method on file before a bucket can be created. Do that first, or the deploy can’t create the bucket.
@@ -169,6 +195,10 @@ Details are in [docs/email-setup.md](docs/email-setup.md).
 
 ![Settings → Receipt forwarding address with the steps for the forwarding address](docs/screenshots/inbox-setup.png)
 
+**Daily reminder email** (optional, in Settings): one email on days when something is waiting in Review.
+
+![Settings → Daily reminder email with its four steps: add the address in Cloudflare, enter it, turn the reminder on, send a test](docs/screenshots/settings-reminder.png)
+
 ## Choose the AI model
 
 By default documents are read with Workers AI inside your Cloudflare account; nothing to set up. To use your own Anthropic, OpenAI or Gemini key instead, add Worker secrets in the Cloudflare dashboard (**Workers & Pages → hsa-locker → Settings → Variables and Secrets**):
@@ -183,6 +213,8 @@ With your own key, documents (which contain health information) are sent to that
 
 Scanned PDFs (no text layer) can’t be read by Workers AI; they go to Review so you can type them in or upload photos of the pages. Anthropic, OpenAI and Gemini keys read scanned PDFs directly.
 
+![Settings → Reading documents showing Workers AI and its model, the bring-your-own-key option and Test extraction](docs/screenshots/settings-reading.png)
+
 ## Use it on your phone
 
 Open your HSA Locker link on the phone, then:
@@ -194,9 +226,15 @@ Upload has a **Take photo** button for paper receipts.
 
 ![HSA Locker on a phone in dark mode: Home with the totals, the Years table and the tab bar](docs/screenshots/phone-dark.png)
 
+In the installed app, **Settings → Notifications** picks what this phone is told about, including a **Reimbursable milestone** when what you can reimburse reaches an amount you choose.
+
+![Settings → Notifications on a phone: Needs review, Couldn't read a document, Reimbursable milestone at $500, Year-end, Email inbox problem and Weekly summary](docs/screenshots/phone-notifications.png)
+
 ## Connect an AI assistant
 
 HSA Locker includes an [MCP](https://modelcontextprotocol.io) server at `https://<your-hsa-locker>/mcp`. Open **Settings → Connect an AI assistant** to copy your URL and see steps for Claude, ChatGPT, Claude Code and others. When an assistant connects, HSA Locker shows a sign-in page; enter your household password to approve it. Assistants can read your ledger and totals and record reimbursements; they can’t open the documents. Changing the password doesn’t disconnect them; use **Disconnect all** in the same place.
+
+![Settings → Connect an AI assistant with the connector URL, Copy, the connected assistants and setup tabs for Claude, ChatGPT and other apps](docs/screenshots/settings-assistant.png)
 
 Not sure what to ask? Ask the assistant “what can you do with HSA Locker?”: it calls `get_started`, which returns your current totals and open items with example requests that fit. Some to try:
 
@@ -214,6 +252,8 @@ Settings → Connect an AI assistant lists more under **Try asking** (tap one to
 - **Download data backup (JSON)**: every record (people, providers, documents’ details, entries, reimbursements). Not the files.
 - **Download all documents (ZIP)**: every original file plus `ledger.csv`. Built in your browser, one file at a time.
 - **Restore data from backup** replaces everything with a backup’s contents. On a new deployment, restore the JSON first, then **Restore documents from ZIP** to put the files back.
+
+![Settings → Backup: download the data backup, all documents or the ledger, and restore from a backup or a ZIP](docs/screenshots/settings-backup.png)
 
 ## Coming from HSA Wizard (Google Sheets)
 
