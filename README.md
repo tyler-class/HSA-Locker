@@ -13,7 +13,7 @@ Keep every medical receipt and EOB for your HSA in one place, and always know ho
 - **Record reimbursements.** Select receipts, record the withdrawal, and compare the total with your HSA statement. Undo any time.
 - **Review reminders.** Optionally, a daily email when something is waiting in Review, sent by the Worker itself to an address you verify in Cloudflare.
 - **Email inbox.** Give HSA Locker a private address on a subdomain you own and set your mail to forward receipts and EOBs to it. Gmail’s forwarding confirmation code shows up right in the app.
-- **People and providers.** “Olivia”, “Olivia Class” and “Class, Olivia” are one person; “Grand Rapids Surgical Suit” on an EOB can be the same provider as on the receipt.
+- **People and providers.** “Sam”, “Sam Example” and “Example, Sam” are one person; “Lakeside Surgical Suit” on an EOB can be the same provider as on the receipt.
 - **Exports.** A CSV of the ledger (any filter), a JSON backup, and a ZIP of every original named by date, person, provider and amount: an audit packet.
 - **AI assistants.** Connect Claude, ChatGPT or any MCP-capable assistant to ask what’s outstanding or record a reimbursement.
 - **Yours.** It runs on your own Cloudflare account. No third-party scripts. The only thing it sends out is an anonymous daily count you can switch off, and nothing from your receipts or documents is ever in it.

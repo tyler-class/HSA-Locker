@@ -1,6 +1,6 @@
 // Matching names on documents to People and Providers.
-// People: exact name/alias match, plus the legacy "Family Names" rule ("Class, Olivia" and
-// "Olivia Class" are Olivia when Class is a family name). Providers: exact name/alias match;
+// People: exact name/alias match, plus the legacy "Family Names" rule ("Example, Sam" and
+// "Sam Example" are Sam when Example is a family name). Providers: exact name/alias match;
 // truncated or near-identical names are only suggested, never merged silently.
 
 /** Lowercase, letters/digits/spaces only, single spaces. */
@@ -25,9 +25,9 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Tidies a patient name as printed. Ported from HSA Wizard's normalizePatientName_:
- * drops anything in parentheses ("Olivia (spouse)" → "Olivia"); when a family name appears
- * anywhere, removes it (with a neighbouring comma) and puts it last ("Class, Olivia" →
- * "Olivia Class"). Added here: ALL CAPS becomes Title Case, and spaces are collapsed.
+ * drops anything in parentheses ("Sam (spouse)" → "Sam"); when a family name appears
+ * anywhere, removes it (with a neighbouring comma) and puts it last ("Example, Sam" →
+ * "Sam Example"). Added here: ALL CAPS becomes Title Case, and spaces are collapsed.
  */
 export function normalizePatientName(raw: string, familyNames: string[] = []): string {
   let s = raw
@@ -81,7 +81,7 @@ export function matchPerson(
   const rest = tokens.slice(1).join(' ');
   const firstOf = (n: string) => nameKey(normalizePatientName(n, familyNames)).split(' ')[0]!;
 
-  // "Olivia Class" ↔ "Olivia" when Class is a family name (either side may carry the last name).
+  // "Sam Example" ↔ "Sam" when Example is a family name (either side may carry the last name).
   const familyHit = people.filter((p) =>
     [p.name, ...p.aliases].some((n) => {
       const t = nameKey(normalizePatientName(n, familyNames)).split(' ');
@@ -145,7 +145,7 @@ export type ProviderMatch =
   | { kind: 'none' };
 
 /**
- * Exact name/alias matches return the provider. A truncated EOB name ("Grand Rapids Surgical Suit")
+ * Exact name/alias matches return the provider. A truncated EOB name ("Lakeside Surgical Suit")
  * or a near-identical spelling returns a suggestion only.
  */
 export function matchProvider(

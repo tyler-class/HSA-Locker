@@ -8,7 +8,7 @@ CREATE TABLE settings (
 );
 
 -- The people receipts are for. aliases_json holds other spellings seen on documents
--- ("Olivia", "Class, Olivia"); matching also uses the family names in settings.
+-- ("Sam", "Example, Sam"); matching also uses the family names in settings.
 CREATE TABLE people (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE people (
   updated_at TEXT NOT NULL
 );
 
--- Providers are normalization targets: EOBs often truncate names ("Hulst Jepsen Physical Ther").
+-- Providers are normalization targets: EOBs often truncate names ("Riverside Physical Ther").
 CREATE TABLE providers (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

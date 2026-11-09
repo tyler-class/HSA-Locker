@@ -27,7 +27,7 @@ npm run import:hsa-wizard -- \
 
 `--family` is the sheet’s **Family Names** (comma-separated). The dry run prints counts by year (receipts, their total, EOB documents and EOB lines), the identical rows it will collapse, rows whose file wasn’t found, and amounts that don’t parse. Nothing is imported.
 
-It also writes **`hsa-wizard-mapping.local.json`**: every patient and provider name as printed, and what it will become. Name variants are collapsed (`Olivia` and `Class, Olivia` → `Olivia Class`) and truncated EOB provider names joined to the full one (`Hulst Jepsen Physical Ther` → `Hulst Jepsen Physical Therapy`). Open it and fix anything wrong. Each printed name becomes an alias of the person or provider, so future documents match too.
+It also writes **`hsa-wizard-mapping.local.json`**: every patient and provider name as printed, and what it will become. Name variants are collapsed (`Sam` and `Example, Sam` → `Sam Example`) and truncated EOB provider names joined to the full one (`Riverside Physical Ther` → `Riverside Physical Therapy`). Open it and fix anything wrong. Each printed name becomes an alias of the person or provider, so future documents match too.
 
 The mapping file is git-ignored. It contains your family’s names; don’t commit it.
 

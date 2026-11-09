@@ -107,7 +107,7 @@ export function draftMapping(rows: LegacyRow[], familyNames: string[]): ImportMa
   const people: Record<string, string> = {};
   const printed = [...new Set(rows.map((r) => r.patient).filter((p): p is string => !!p))];
   const normalized = new Map(printed.map((p) => [p, normalizePatientName(p, familyNames)]));
-  // "Olivia" → "Olivia Class" when "Olivia Class" also appears and Class is a family name.
+  // "Sam" → "Sam Example" when "Sam Example" also appears and Example is a family name.
   const full = [...new Set(normalized.values())];
   for (const p of printed) {
     const n = normalized.get(p)!;

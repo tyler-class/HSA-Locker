@@ -74,7 +74,7 @@ const safe = (s: string | null | undefined) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 40);
 
-/** "2024-03-05_Olivia-Class_Hulst-Jepsen-PT_125.00.pdf" for exports. */
+/** "2024-03-05_Sam-Example_Riverside-PT_125.00.pdf" for exports. */
 export function exportFilename(p: {
   date: string | null;
   person: string | null;
