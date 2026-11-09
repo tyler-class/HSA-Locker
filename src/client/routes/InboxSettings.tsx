@@ -1,22 +1,25 @@
-// Settings → Inbox: the email setup wizard, live status, forwarding help and verification codes.
+// Settings → Get receipts by email: the setup steps (with the person's own domain filled in),
+// live status, forwarding help and verification codes.
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
+import { registrableDomain, suggestInboxSubdomain } from '@shared/logic';
 import { Icon } from '../components/Icon';
 import { useToast } from '../components/Toast';
 import {
   cx,
   ErrorText,
   GhostButton,
+  InfoTip,
   PageHeader,
   PrimaryButton,
   SectionLabel,
   SlideToggle,
-  SubHeading,
   Switch,
   TextInput,
 } from '../components/ui';
 import { api } from '../lib/api';
+import { EMAIL_ROUTING_URL, useEmailPath, type EmailPath } from '../lib/emailSetup';
 import { ago } from '../lib/format';
 import { useAppState, useInbox } from '../lib/queries';
 import { useSave } from '../lib/useSave';
@@ -72,9 +75,10 @@ const REASON: Record<string, string> = {
   store_failed: 'couldn’t store it',
 };
 
-/** Hostname that has at least three labels (a subdomain), e.g. hsa-in.example.com. */
+/** A subdomain of a registrable domain, e.g. hsa-in.example.com (not example.com itself). */
 function isSubdomain(h: string) {
-  return /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.){2,}[a-z]{2,63}$/.test(h);
+  const reg = registrableDomain(h);
+  return !!reg && reg !== h;
 }
 
 interface InboxCheck {
@@ -84,185 +88,347 @@ interface InboxCheck {
   other_address: string | null;
 }
 
-/** One line of the setup checklist. */
-function Check({ state, children }: { state: 'ok' | 'bad' | 'wait'; children: React.ReactNode }) {
+interface DomainCheck {
+  domain: string;
+  status: 'cloudflare' | 'elsewhere' | 'unknown';
+  ns: string[];
+}
+
+/** The first line everywhere email is set up. */
+export const NEEDS_DOMAIN = 'Needs a domain on your Cloudflare account.';
+const SKIP_EMAIL = 'Skip this. Upload and Take photo do the same thing.';
+
+/** Why a domain: shown behind the ⓘ next to the requirement. */
+function WhyDomain() {
   return (
-    <li className="flex items-start gap-2.5">
+    <InfoTip label="Why a domain?">
+      <p>
+        Mail can only be delivered to a domain you control. The app’s workers.dev address can’t
+        receive email, so it needs a domain whose settings (DNS) are on your Cloudflare account.
+      </p>
+    </InfoTip>
+  );
+}
+
+/** "Needs a domain on your Cloudflare account." with the why behind an ⓘ. */
+function Requirement() {
+  return (
+    <div className="flex items-center gap-1.5 text-ink">
+      {NEEDS_DOMAIN}
+      <WhyDomain />
+    </div>
+  );
+}
+
+/** A button-styled link that opens the Cloudflare dashboard in a new tab. */
+export function CloudflareButton({ children }: { children: ReactNode }) {
+  return (
+    <a
+      href={EMAIL_ROUTING_URL}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1.5 self-start rounded-full bg-chip px-4 py-2 text-[15px] font-medium text-ink"
+    >
+      {children}
+      <Icon name="link" size={15} className="text-accent" />
+    </a>
+  );
+}
+
+/** "Needs a domain on your Cloudflare account", then the fork (unless the app's own domain answers it). */
+export function DomainFork({
+  path,
+  requirement = true,
+}: {
+  path: EmailPath;
+  /** Off where the requirement is already the page's first line. */
+  requirement?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-3 text-sm">
+      {requirement && <Requirement />}
+      {path.host ? (
+        <p className="flex items-center gap-2 text-ok">
+          <Icon name="check" size={16} /> Your domain {path.host} is on Cloudflare.
+        </p>
+      ) : (
+        <>
+          <SlideToggle<'yes' | 'no'>
+            label="Do you have a domain on Cloudflare?"
+            className="sm:max-w-sm"
+            value={path.answer}
+            onChange={path.setAnswer}
+            options={[
+              ['yes', 'I have one'],
+              ['no', 'I don’t'],
+            ]}
+          />
+          {path.answer === 'no' && <p className="text-soft">{SKIP_EMAIL}</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** One setup step: a status mark, a short title, then one sentence and a button. */
+function Step({
+  n,
+  state,
+  title,
+  info,
+  children,
+}: {
+  n: number;
+  state: 'ok' | 'bad' | 'wait';
+  title: string;
+  info?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <li className="flex gap-3 border-b border-line py-4 last:border-b-0">
       <span
         className={cx(
-          'mt-0.5 grid h-5 w-5 flex-none place-items-center rounded-full',
+          'mt-px grid h-6 w-6 flex-none place-items-center rounded-full text-xs font-semibold',
           state === 'ok'
             ? 'bg-ok text-white'
             : state === 'bad'
               ? 'bg-warn text-white'
-              : 'bg-chip text-faint',
+              : 'bg-chip text-soft',
         )}
-        aria-label={state === 'ok' ? 'Done' : state === 'bad' ? 'Problem' : 'Not yet'}
+        aria-label={state === 'ok' ? 'Done' : state === 'bad' ? 'Needs attention' : 'Not yet'}
       >
         {state === 'ok' ? (
-          <Icon name="check" size={13} strokeWidth={2.4} />
+          <Icon name="check" size={14} strokeWidth={2.4} />
         ) : state === 'bad' ? (
           '!'
         ) : (
-          ''
+          n
         )}
       </span>
-      <span className={state === 'ok' ? 'text-ink' : 'text-soft'}>{children}</span>
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 text-sm">
+        <h3 className="flex items-center gap-1.5 text-[15px] font-semibold text-ink">
+          {title}
+          {info}
+        </h3>
+        {children}
+      </div>
     </li>
   );
 }
 
+/** Waits until the value has stopped changing for a moment (for lookups while typing). */
+function useSettled<T>(value: T, ms = 600): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
 export function InboxSettings() {
   const nav = useNavigate();
+  const { data: state } = useAppState();
+  const path = useEmailPath();
+  if (!state) return null;
+  const s = state.settings;
+  const configured = !!s.inbox_address;
+  return (
+    <div className="pb-16">
+      <PageHeader title="Get receipts by email" back="/settings" sub={<Requirement />} />
+      {!configured && (
+        <div className="px-6 pt-3">
+          <DomainFork path={path} requirement={false} />
+        </div>
+      )}
+      {(configured || path.go) && (
+        <SetupSteps key={`${s.inbox_local}@${s.inbox_domain ?? ''}`} host={path.host} />
+      )}
+      <div className="px-6 pt-6">
+        <GhostButton className="-ml-3" icon="back" onClick={() => nav('/settings')}>
+          Back to Settings
+        </GhostButton>
+      </div>
+    </div>
+  );
+}
+
+const LOCAL_RE = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
+
+/** The steps, with the address the person typed (or the suggested one) filled in throughout. */
+function SetupSteps({ host }: { host: string | null }) {
   const toast = useToast();
   const { data: state } = useAppState();
-  const configured = !!state?.settings.inbox_address;
+  const s = state!.settings;
+  const configured = !!s.inbox_address;
   const inbox = useInbox(configured);
   const check = useQuery({
-    queryKey: ['inbox-check', state?.settings.inbox_address],
+    queryKey: ['inbox-check', s.inbox_address],
     queryFn: () => api.get<InboxCheck>('/inbox/check'),
     enabled: configured,
     refetchInterval: (q) =>
       q.state.data?.routing === 'ok' && q.state.data.dns === 'ok' ? false : 10_000,
   });
-  const { run, busy } = useSave();
-  if (!state) return null;
-  const s = state.settings;
-  const i = inbox.data;
+  const [sub, setSub] = useState(s.inbox_domain ?? (host ? suggestInboxSubdomain(host) : ''));
+  const [name, setName] = useState(s.inbox_local);
+  const { run, busy, error } = useSave();
+  const subOk = isSubdomain(sub);
+  const nameOk = LOCAL_RE.test(name);
+  const changed = name !== s.inbox_local || sub !== (s.inbox_domain ?? '');
+  const shownSub = subOk ? sub : 'hsa-in.yourdomain.com';
+  const apex = registrableDomain(shownSub) ?? 'yourdomain.com';
+  // Is the typed domain on Cloudflare? Known already when it's the app's own domain.
+  const lookFor = useSettled(subOk ? registrableDomain(sub) : null);
+  const ns = useQuery({
+    queryKey: ['domain-check', lookFor],
+    queryFn: () =>
+      api.get<DomainCheck>(`/inbox/domain-check?domain=${encodeURIComponent(lookFor!)}`),
+    enabled: !!lookFor && lookFor !== host,
+    staleTime: 5 * 60_000,
+  });
+  const onCf = subOk && apex === host ? 'cloudflare' : lookFor === apex ? ns.data?.status : null;
   const c = check.data;
+  const i = inbox.data;
   const lastAccepted = i?.log.find((l) => l.outcome !== 'rejected');
-  const sub = s.inbox_domain ?? 'hsa-in.example.com';
-  const apex = sub.split('.').slice(-2).join('.');
 
   return (
-    <div className="pb-16">
-      <PageHeader
-        title="Inbox"
-        back="/settings"
-        sub="Forward receipts and EOBs to HSA Locker by email."
-      />
-
-      <div className="mx-6 mt-2 flex flex-col gap-3 rounded-xl bg-chip p-4 text-sm">
-        <p className="font-medium text-ink">
-          All three steps are required, in this order. Mail won’t arrive until they’re done.
-        </p>
-        <ul className="flex flex-col gap-2">
-          <Check
-            state={
-              !configured
-                ? 'wait'
-                : c?.dns === 'ok'
-                  ? 'ok'
-                  : c && c.dns !== 'unknown'
-                    ? 'bad'
-                    : 'wait'
-            }
+    <>
+      <ol className="flex flex-col px-6 pt-2">
+        <Step
+          n={1}
+          state={configured && !changed ? 'ok' : 'wait'}
+          title="Choose the address"
+          info={
+            <InfoTip label="Why a subdomain?">
+              <p>
+                A subdomain is a new name in front of your domain, like{' '}
+                <span className="font-mono">hsa-in.{apex}</span>. Using one keeps your normal email
+                at {apex} working; pointing {apex} itself here would take over its mail.
+              </p>
+            </InfoTip>
+          }
+        >
+          <TextInput
+            aria-label="Email subdomain"
+            placeholder="hsa-in.yourdomain.com"
+            value={sub}
+            onChange={(e) => setSub(e.target.value.trim().toLowerCase())}
+          />
+          {sub && !subOk ? (
+            <p className="text-xs text-warn">
+              Add a name in front of your domain, like hsa-in.{registrableDomain(sub) ?? 'it'}.
+            </p>
+          ) : onCf === 'cloudflare' && apex !== host ? (
+            <p className="flex items-center gap-1.5 text-xs text-ok">
+              <Icon name="check" size={14} /> {apex} is on Cloudflare.
+            </p>
+          ) : onCf === 'elsewhere' ? (
+            <p className="text-xs text-warn">
+              {apex} isn’t on Cloudflare, so mail to it can’t reach HSA Locker.
+            </p>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <TextInput
+              aria-label="Address name"
+              className="min-w-0 flex-[1_1_11rem] font-mono"
+              value={name}
+              onChange={(e) => setName(e.target.value.trim().toLowerCase())}
+            />
+            <span className="min-w-0 font-mono [overflow-wrap:anywhere] text-soft">
+              @{shownSub}
+            </span>
+          </div>
+          <p className="text-xs text-faint">
+            {name && !nameOk
+              ? 'Use letters, numbers, dots, dashes or underscores.'
+              : 'Keep it hard to guess: anyone who has it can send you documents.'}
+          </p>
+          <PrimaryButton
+            className="self-start"
+            disabled={busy || !nameOk || !subOk || !changed}
+            onClick={async () => {
+              if (
+                s.inbox_domain &&
+                !confirm(
+                  `Change the address to ${name}@${sub}? The current one stops working, so the Cloudflare routing rule must match.`,
+                )
+              )
+                return;
+              await run(
+                () => api.patch('/settings', { inbox_domain: sub, inbox_local: name }),
+                [['inbox'], ['inbox-check']],
+              );
+            }}
           >
-            1. Subdomain added in Cloudflare
-            {configured &&
-              c?.dns === 'missing' &&
-              ` (no mail records found for ${s.inbox_domain} yet)`}
-            {configured &&
-              c?.dns === 'other' &&
-              ` (${s.inbox_domain} gets mail somewhere else: ${c.mx.join(', ')})`}
-          </Check>
-          <Check
-            state={
-              !configured
-                ? 'wait'
-                : c?.routing === 'ok'
-                  ? 'ok'
-                  : c?.routing === 'mismatch'
-                    ? 'bad'
-                    : 'wait'
-            }
-          >
-            2. Routing rule in Cloudflare
-            {configured && c?.routing === 'waiting' && ': confirmed when your test email arrives'}
-            {c?.routing === 'mismatch' &&
-              `: mail arrived for ${c.other_address}, which doesn’t match the address in step 3`}
-          </Check>
-          <Check state={configured ? 'ok' : 'wait'}>3. Address entered here</Check>
-        </ul>
-        <p className="text-xs text-faint">
-          No domain on Cloudflare? Skip email: uploading works for everything.
-        </p>
-      </div>
+            Save address
+          </PrimaryButton>
+          <ErrorText>{error}</ErrorText>
+        </Step>
 
-      <SectionLabel icon="settings">1. In Cloudflare: add the subdomain</SectionLabel>
-      <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
-        <p className="text-soft">
-          Pick a <strong className="text-ink">new subdomain</strong> of a domain on your Cloudflare
-          account, like <span className="font-mono text-ink">hsa-in.example.com</span>. Never the
-          domain itself if it already gets email: that would take over its mail.
-        </p>
-        <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-ink">
-          <li>
-            Open the{' '}
-            <a
-              className="text-accent"
-              href="https://dash.cloudflare.com/?to=/:account/:zone/email/routing/overview"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Cloudflare dashboard
-            </a>{' '}
-            → your domain
-            {s.inbox_domain ? (
-              <>
-                {' '}
-                (<strong>{apex}</strong>)
-              </>
-            ) : (
-              ''
-            )}{' '}
-            → <strong>Email → Email Routing</strong>.
-          </li>
-          <li>
-            <strong>Settings → Subdomains</strong>: add the subdomain
-            {s.inbox_domain ? (
-              <>
-                {' '}
-                <strong>{s.inbox_domain}</strong>
-              </>
-            ) : (
-              ''
-            )}
-            .
-          </li>
-          <li>
-            If Cloudflare offers to add records or enable routing for the main domain, skip it.
-          </li>
-        </ol>
-      </div>
+        <Step
+          n={2}
+          state={
+            !configured || changed
+              ? 'wait'
+              : c?.dns === 'ok'
+                ? 'ok'
+                : c && c.dns !== 'unknown'
+                  ? 'bad'
+                  : 'wait'
+          }
+          title="Add it in Cloudflare"
+          info={
+            <InfoTip label="If Cloudflare asks about your main domain">
+              <p>
+                If Cloudflare offers to set up email for {apex} itself, skip it. Only{' '}
+                <span className="font-mono">{shownSub}</span> needs it.
+              </p>
+            </InfoTip>
+          }
+        >
+          <p className="text-soft">
+            Pick <strong className="text-ink">{apex}</strong>, open{' '}
+            <strong className="text-ink">Settings</strong>, and add{' '}
+            <strong className="font-mono text-ink">{shownSub}</strong> under Subdomains.
+          </p>
+          {configured && !changed && c?.dns === 'missing' && (
+            <p className="text-xs text-warn">Not found yet. It can take a few minutes.</p>
+          )}
+          {configured && !changed && c?.dns === 'other' && (
+            <p className="text-xs text-warn">{shownSub} already gets mail somewhere else.</p>
+          )}
+          <CloudflareButton>Open Email Routing</CloudflareButton>
+        </Step>
 
-      <SectionLabel icon="settings">2. In Cloudflare: create the routing rule</SectionLabel>
-      <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
-        <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-ink">
-          <li>
-            In Email Routing, <strong>Routing rules → Custom addresses → Create address</strong>.
-          </li>
-          <li>
-            Address:{' '}
-            {s.inbox_address ? (
-              <span className="font-mono">{s.inbox_address}</span>
-            ) : (
-              <>a name at your subdomain (use the same one in step 3)</>
-            )}
-            .
-          </li>
-          <li>
-            Action <strong>Send to a Worker</strong>, destination <strong>hsa-locker</strong>. Save.
-          </li>
-        </ol>
-      </div>
-
-      <SectionLabel icon="mail">3. Here: enter the same address</SectionLabel>
-      <AddressForm
-        key={`${s.inbox_local}@${s.inbox_domain ?? ''}`}
-        local={s.inbox_local}
-        domain={s.inbox_domain}
-      />
+        <Step
+          n={3}
+          state={
+            !configured || changed
+              ? 'wait'
+              : c?.routing === 'ok'
+                ? 'ok'
+                : c?.routing === 'mismatch'
+                  ? 'bad'
+                  : 'wait'
+          }
+          title="Send its mail to HSA Locker"
+        >
+          <p className="text-soft">
+            Under <strong className="text-ink">Routing Rules</strong>, create a rule for{' '}
+            <strong className="font-mono [overflow-wrap:anywhere] text-ink">
+              {name || 'the name'}@{shownSub}
+            </strong>{' '}
+            that does <strong className="text-ink">Send to a Worker</strong>:{' '}
+            <strong className="text-ink">hsa-locker</strong>.
+          </p>
+          {configured && !changed && c?.routing === 'mismatch' && (
+            <p className="text-xs text-warn">
+              Mail arrived for {c.other_address}, which doesn’t match this address.
+            </p>
+          )}
+          <CloudflareButton>Open Email Routing</CloudflareButton>
+        </Step>
+      </ol>
 
       {s.inbox_address && (
         <>
@@ -274,10 +440,15 @@ export function InboxSettings() {
               </div>
               <Copy text={s.inbox_address} />
             </div>
-            <p className="text-soft">
-              Email a receipt (a PDF or photo) from Gmail or another provider. Sending from a mail
-              service that hosts {apex} may keep it internal (Fastmail: set Routing to external).
-            </p>
+            <div className="flex items-center gap-1.5 text-soft">
+              Email it a receipt (a PDF or photo) from another account.
+              <InfoTip label="Sending from your own domain">
+                <p>
+                  A mail service that hosts {registrableDomain(s.inbox_domain ?? '') ?? apex} may
+                  keep the message internal. In Fastmail, set the domain’s Routing to external.
+                </p>
+              </InfoTip>
+            </div>
             {lastAccepted ? (
               <p className="flex items-center gap-2 text-ok" role="status">
                 <Icon name="check" size={16} /> Received {ago(lastAccepted.received_at)}:{' '}
@@ -418,75 +589,7 @@ export function InboxSettings() {
           </div>
         </>
       )}
-      <div className="px-6 pt-6">
-        <GhostButton className="-ml-3" icon="back" onClick={() => nav('/settings')}>
-          Back to Settings
-        </GhostButton>
-      </div>
-    </div>
-  );
-}
-
-const LOCAL_RE = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
-
-/** Step 3: the address, as name @ subdomain, matching the Cloudflare routing rule. */
-function AddressForm({ local, domain }: { local: string; domain: string | null }) {
-  const [name, setName] = useState(local);
-  const [sub, setSub] = useState(domain ?? '');
-  const { run, busy, error } = useSave();
-  const nameOk = LOCAL_RE.test(name);
-  const subOk = isSubdomain(sub);
-  const changed = name !== local || sub !== (domain ?? '');
-  return (
-    <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
-      <SubHeading>Subdomain</SubHeading>
-      <TextInput
-        aria-label="Email subdomain"
-        placeholder="hsa-in.example.com"
-        value={sub}
-        onChange={(e) => setSub(e.target.value.trim().toLowerCase())}
-      />
-      {sub && !subOk && (
-        <p className="text-xs text-warn">
-          Enter the subdomain (three parts or more), not the domain itself.
-        </p>
-      )}
-      <SubHeading>Address</SubHeading>
-      <div className="flex items-center gap-2">
-        <TextInput
-          aria-label="Address name"
-          className="min-w-0 flex-1 font-mono"
-          value={name}
-          onChange={(e) => setName(e.target.value.trim().toLowerCase())}
-        />
-        <span className="min-w-0 truncate font-mono text-soft">@{sub || 'subdomain'}</span>
-      </div>
-      <p className="text-xs text-faint">
-        {name && !nameOk
-          ? 'Use letters, numbers, dots, dashes or underscores.'
-          : 'Must match the routing rule exactly. An easy-to-guess name lets anyone send you documents.'}
-      </p>
-      <PrimaryButton
-        className="self-start"
-        disabled={busy || !nameOk || !subOk || !changed}
-        onClick={async () => {
-          if (
-            domain &&
-            !confirm(
-              `Change the address to ${name}@${sub}? The current one stops working, so the Cloudflare routing rule must match.`,
-            )
-          )
-            return;
-          await run(
-            () => api.patch('/settings', { inbox_domain: sub, inbox_local: name }),
-            [['inbox'], ['inbox-check']],
-          );
-        }}
-      >
-        Save address
-      </PrimaryButton>
-      <ErrorText>{error}</ErrorText>
-    </div>
+    </>
   );
 }
 

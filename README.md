@@ -140,11 +140,14 @@ Once a day your copy tells HSA Locker's developer that it exists: a random id it
 
 ## Forward receipts by email
 
-Inbound email needs a domain on your Cloudflare account. Use a **new subdomain** (for example `hsa-in.example.com`) so your normal email isn’t touched. In the app, open **Settings → Inbox** and follow the steps; the details, and what to do without a domain, are in [docs/email-setup.md](docs/email-setup.md).
+**Needs a domain on your Cloudflare account.** A `workers.dev` address can’t receive email.
 
-No domain? Everything else works with uploads.
+- **You have one:** open **Settings → Get receipts by email** and follow the steps. You’ll add a **new subdomain** (for example `hsa-in.example.com`) under **Compute → Email Service → Email Routing**, so your normal email isn’t touched. The optional daily reminder email sends from the same subdomain.
+- **You don’t:** skip this. **Upload** and **Take photo** do the same thing.
 
-<!-- 📸 SCREENSHOT docs/screenshots/inbox-setup.png: Settings → Inbox with the steps for the forwarding address -->
+Details are in [docs/email-setup.md](docs/email-setup.md).
+
+<!-- 📸 SCREENSHOT docs/screenshots/inbox-setup.png: Settings → Get receipts by email with the steps for the forwarding address -->
 
 ## Choose the AI model
 

@@ -40,7 +40,9 @@ import {
 const USAGE_COUNTED = 'documents, entries and reimbursements';
 import { ConnectAISection } from './ConnectAI';
 import { buildFlags } from '@shared/kit/build';
-import { CategoriesEditor, PeopleEditor, ProvidersEditor } from './SettingsLists';
+import { PeopleEditor } from './SettingsLists';
+import { CloudflareButton, DomainFork, NEEDS_DOMAIN } from './InboxSettings';
+import { useEmailPath } from '../lib/emailSetup';
 
 function Row({
   icon,
@@ -83,6 +85,16 @@ function Row({
   );
 }
 
+/** A Settings row's text: a count, then what fills the list. */
+function CountLine({ n, text }: { n: number; text: string }) {
+  return (
+    <span className="flex items-baseline gap-1.5">
+      <span className="font-medium tnum">{n}</span>
+      <span className="text-sm text-soft">· {text}</span>
+    </span>
+  );
+}
+
 export function Settings() {
   const qc = useQueryClient();
   const toast = useToast();
@@ -98,6 +110,7 @@ export function Settings() {
   const [aiTest, setAiTest] = useState<string>('');
   const fileRef = useRef<HTMLInputElement>(null);
   const zipRef = useRef<HTMLInputElement>(null);
+  const emailPath = useEmailPath();
   if (!state) return null;
   const s = state.settings;
 
@@ -219,18 +232,25 @@ export function Settings() {
         />
       </div>
 
-      <SectionLabel icon="inbox">Inbox</SectionLabel>
-      <div className="px-6 pt-1">
-        <Row icon="mail" to="/settings/inbox">
-          {s.inbox_address ? (
+      <SectionLabel icon="inbox">Get receipts by email</SectionLabel>
+      <div className="px-6 pt-3">
+        {s.inbox_address ? (
+          <Row icon="mail" to="/settings/inbox">
             <span className="flex flex-col">
               Email inbox {s.inbox_paused ? '(paused)' : ''}
               <span className="truncate font-mono text-xs text-soft">{s.inbox_address}</span>
             </span>
-          ) : (
-            'Set up email forwarding'
-          )}
-        </Row>
+          </Row>
+        ) : (
+          <>
+            <DomainFork path={emailPath} />
+            {emailPath.go && (
+              <Row icon="mail" to="/settings/inbox">
+                Set up receipts by email
+              </Row>
+            )}
+          </>
+        )}
         {state.counts.failed > 0 && (
           <p className="pt-2 text-sm text-warn">
             {state.counts.failed} document{state.counts.failed === 1 ? '' : 's'} couldn’t be read
@@ -301,10 +321,18 @@ export function Settings() {
       </div>
 
       <SectionLabel icon="tag">Providers</SectionLabel>
-      <ProvidersEditor state={state} />
+      <div className="px-6 pt-1">
+        <Row icon="tag" to="/settings/providers">
+          <CountLine n={state.providers.length} text="Added automatically from your receipts" />
+        </Row>
+      </div>
 
       <SectionLabel icon="layers">Categories</SectionLabel>
-      <CategoriesEditor state={state} />
+      <div className="px-6 pt-1">
+        <Row icon="layers" to="/settings/categories">
+          <CountLine n={state.categories.length} text="The AI picks one for each receipt" />
+        </Row>
+      </div>
 
       <SectionLabel icon="ai">Reading documents</SectionLabel>
       <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
@@ -582,7 +610,7 @@ function OwnKeyHelp() {
   );
 }
 
-/** Settings → Notifications: the daily review reminder email. */
+/** Settings → Daily reminder email. It sends from the inbox's domain, so it waits for the inbox. */
 function Notifications() {
   const { data: state } = useAppState();
   const { run, busy, error } = useSave();
@@ -592,128 +620,104 @@ function Notifications() {
   const s = state.settings;
   const valid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
   const ready = !!s.inbox_domain;
-  const step = 'flex flex-col gap-2 border-b border-line pb-3';
+  const step = 'flex flex-col gap-2 border-b border-line py-3';
   const num = 'text-ink font-medium';
   return (
     <>
-      <SectionLabel icon="mail">Notifications</SectionLabel>
-      <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
-        <p className="text-soft">
-          Get one email a day when something is waiting in Review. Nothing is sent on days with
-          nothing to review.
-        </p>
-        {!ready ? (
-          <p className="rounded-xl bg-chip p-3 text-soft">
-            Set up the{' '}
+      <SectionLabel icon="mail">Daily reminder email</SectionLabel>
+      <div className="flex flex-col gap-2 px-6 pt-4 text-sm">
+        {!ready && <p className="text-ink">{NEEDS_DOMAIN}</p>}
+        <p className="text-soft">One email on days when something is waiting in Review.</p>
+        {!ready && (
+          <p className="rounded-xl bg-chip px-3 py-2.5 text-soft">
+            Set up{' '}
             <Link to="/settings/inbox" className="text-accent">
-              email inbox
+              Get receipts by email
             </Link>{' '}
-            first: reminders are sent from its subdomain.
+            first: the reminder sends from its domain.
           </p>
-        ) : (
-          <>
-            <div className={step}>
-              <span className={num}>1. In Cloudflare: verify the address reminders go to</span>
-              <ol className="flex list-[lower-alpha] flex-col gap-1 pl-5 text-soft">
-                <li>
-                  Open the{' '}
-                  <a
-                    className="text-accent"
-                    href="https://dash.cloudflare.com/?to=/:account/:zone/email/routing/overview"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Cloudflare dashboard
-                  </a>{' '}
-                  →{' '}
-                  <strong className="text-ink">
-                    {s.inbox_domain!.split('.').slice(-2).join('.')}
-                  </strong>{' '}
-                  →{' '}
-                  <strong className="text-ink">
-                    Email → Email Routing → Destination addresses
-                  </strong>
-                  .
-                </li>
-                <li>
-                  <strong className="text-ink">Add destination address</strong> with the email you
-                  want reminders at.
-                </li>
-                <li>Click the link in the verification email Cloudflare sends you.</li>
-              </ol>
+        )}
+        <div
+          inert={!ready}
+          aria-disabled={!ready}
+          className={cx('flex flex-col', !ready && 'opacity-45 select-none')}
+        >
+          <div className={step}>
+            <span className={num}>1. Add the address reminders go to</span>
+            <span className="text-soft">
+              Under Destination Addresses, add your email and click the link Cloudflare sends.
+            </span>
+            <CloudflareButton>Open Email Routing</CloudflareButton>
+          </div>
+          <div className={step}>
+            <span className={num}>2. Enter the same address here</span>
+            <form
+              className="flex w-full gap-2 sm:w-2/3"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                await run(() =>
+                  api.patch('/settings', {
+                    notify_email: email.trim() || null,
+                    ...(email.trim() ? {} : { notify_daily: false }),
+                  }),
+                );
+              }}
+            >
+              <TextInput
+                type="email"
+                aria-label="Reminder email address"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <PrimaryButton
+                tone="secondary"
+                type="submit"
+                disabled={
+                  busy || (email.trim() !== '' && !valid) || email.trim() === (s.notify_email ?? '')
+                }
+              >
+                Save
+              </PrimaryButton>
+            </form>
+          </div>
+          <div className={step}>
+            <div className="flex items-center gap-3">
+              <span className={`flex-1 ${num}`}>3. Turn on the daily reminder</span>
+              <Switch
+                label="Daily review reminder"
+                on={s.notify_daily}
+                disabled={!s.notify_email}
+                onChange={(notify_daily) => run(() => api.patch('/settings', { notify_daily }))}
+              />
             </div>
-            <div className={step}>
-              <span className={num}>2. Send reminders to (the same address)</span>
-              <form
-                className="flex w-full gap-2 sm:w-2/3"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  await run(() =>
-                    api.patch('/settings', {
-                      notify_email: email.trim() || null,
-                      ...(email.trim() ? {} : { notify_daily: false }),
-                    }),
+            <span className="text-xs text-faint">
+              Sent around 8 a.m. Eastern from reminders@{s.inbox_domain ?? 'your inbox domain'}.
+            </span>
+          </div>
+          <div className="flex flex-col gap-1 pt-3">
+            <span className={num}>4. Send a test</span>
+            <div className="flex items-center gap-3">
+              <GhostButton
+                icon="mail"
+                className="-ml-3 text-accent"
+                disabled={busy || !s.notify_email}
+                onClick={async () => {
+                  setResult('Sending…');
+                  const r = await run(() =>
+                    api.post<{ sent: boolean; reason?: string }>('/notify/test'),
+                  );
+                  setResult(
+                    r ? (r.sent ? 'Sent. Check your inbox.' : (r.reason ?? 'Not sent.')) : '',
                   );
                 }}
               >
-                <TextInput
-                  type="email"
-                  aria-label="Reminder email address"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <PrimaryButton
-                  tone="secondary"
-                  type="submit"
-                  disabled={
-                    busy ||
-                    (email.trim() !== '' && !valid) ||
-                    email.trim() === (s.notify_email ?? '')
-                  }
-                >
-                  Save
-                </PrimaryButton>
-              </form>
+                Send a test
+              </GhostButton>
+              {result && <span className="text-soft">{result}</span>}
             </div>
-            <div className={step}>
-              <div className="flex items-center gap-3">
-                <span className={`flex-1 ${num}`}>3. Turn on the daily reminder</span>
-                <Switch
-                  label="Daily review reminder"
-                  on={s.notify_daily}
-                  disabled={!s.notify_email}
-                  onChange={(notify_daily) => run(() => api.patch('/settings', { notify_daily }))}
-                />
-              </div>
-              <span className="text-xs text-faint">
-                Sent around 8 a.m. Eastern from reminders@{s.inbox_domain}, which needs no setup.
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className={num}>4. Send a test</span>
-              <div className="flex items-center gap-3">
-                <GhostButton
-                  icon="mail"
-                  className="-ml-3 text-accent"
-                  disabled={busy || !s.notify_email}
-                  onClick={async () => {
-                    setResult('Sending…');
-                    const r = await run(() =>
-                      api.post<{ sent: boolean; reason?: string }>('/notify/test'),
-                    );
-                    setResult(
-                      r ? (r.sent ? 'Sent. Check your inbox.' : (r.reason ?? 'Not sent.')) : '',
-                    );
-                  }}
-                >
-                  Send a test
-                </GhostButton>
-                {result && <span className="text-soft">{result}</span>}
-              </div>
-            </div>
-          </>
-        )}
+          </div>
+        </div>
         <ErrorText>{error}</ErrorText>
       </div>
     </>

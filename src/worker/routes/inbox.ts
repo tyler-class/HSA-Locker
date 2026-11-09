@@ -1,9 +1,9 @@
-// Settings → Inbox: the address, its log, forwarding confirmations, rotate.
+// Settings → Get receipts by email: the address, its log, forwarding confirmations, rotate.
 import { Hono } from 'hono';
-import { mxStatus, routingStatus } from '@shared/logic';
+import { mxStatus, nsStatus, registrableDomain, routingStatus } from '@shared/logic';
 import type { InboxLogRow, InboxVerification } from '@shared/types';
 import { all, first, loadSettings, newInboxToken, nowIso, setSettingStmt } from '../db';
-import { notFound, type AppEnv } from './util';
+import { ApiError, notFound, type AppEnv } from './util';
 
 export const inbox = new Hono<AppEnv>();
 
@@ -82,6 +82,29 @@ inbox.get('/inbox/check', async (c) => {
   );
   const routing = routingStatus(log, settings.inbox_address, settings.inbox_domain);
   return c.json({ dns, mx, routing: routing.status, other_address: routing.other });
+});
+
+/**
+ * Is a domain on Cloudflare? Its public nameservers (*.ns.cloudflare.com) say so, which lets the
+ * setup warn before anyone adds records that can't work. Only the registrable domain is looked up.
+ */
+inbox.get('/inbox/domain-check', async (c) => {
+  const domain = registrableDomain(c.req.query('domain') ?? '');
+  if (!domain) throw new ApiError(400, 'invalid', 'Enter a domain name like example.com.');
+  let result: ReturnType<typeof nsStatus> = { status: 'unknown', ns: [] };
+  try {
+    const res = await fetch(
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=NS`,
+      { headers: { Accept: 'application/dns-json' } },
+    );
+    if (res.ok)
+      result = nsStatus(
+        ((await res.json()) as { Answer?: { type: number; data: string }[] }).Answer,
+      );
+  } catch {
+    /* DNS lookup unavailable: report unknown */
+  }
+  return c.json({ domain, status: result.status, ns: result.ns });
 });
 
 /** New address; the old one stops working immediately. */

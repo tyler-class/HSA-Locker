@@ -1,5 +1,5 @@
 // The optional daily review reminder. Sent with the Worker's send_email binding to an address the
-// owner verified in Email Routing (Destination addresses): free on every plan, no extra DNS. It
+// owner verified in Email Routing (Destination Addresses): free on every plan, no extra DNS. It
 // comes from reminders@<inbox subdomain>, which already has Email Routing.
 import { centsToDecimal } from '@shared/logic';
 import { first, getSetting, loadSettings, setSettingStmt } from './db';
@@ -35,13 +35,13 @@ export function reminderMessage(o: {
     '',
     link ? `Review: ${link}` : 'Open HSA Locker and go to Review.',
     '',
-    'Turn these off in Settings → Notifications.',
+    'Turn these off in Settings → Daily reminder email.',
   ].join('\n');
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const html = `<div style="font:15px/1.5 -apple-system,'Segoe UI',system-ui,sans-serif;color:#1a1a1a;max-width:480px">
 ${lines.map((l) => `<p style="margin:0 0 12px">${esc(l)}</p>`).join('\n')}
 ${link ? `<p style="margin:16px 0"><a href="${esc(link)}" style="display:inline-block;background:#2f5fd0;color:#fff;text-decoration:none;padding:10px 18px;border-radius:999px">Open Review</a></p>` : ''}
-<p style="margin:16px 0 0;color:#8c8c8c;font-size:13px">Turn these off in HSA Locker → Settings → Notifications.</p>
+<p style="margin:16px 0 0;color:#8c8c8c;font-size:13px">Turn these off in HSA Locker → Settings → Daily reminder email.</p>
 </div>`;
   return { subject, text, html };
 }
@@ -51,7 +51,7 @@ function explain(e: unknown): string {
   const code = (e as { code?: string })?.code ?? '';
   const msg = e instanceof Error ? e.message : '';
   if (/RECIPIENT|destination/i.test(code + msg))
-    return 'Cloudflare won’t send to that address yet. Add it under Email Routing → Destination addresses and click the link in the verification email.';
+    return 'Cloudflare won’t send to that address yet. Add it in Email Routing under Destination Addresses and click the link in the verification email.';
   if (/SENDER|DOMAIN/i.test(code + msg))
     return 'Cloudflare won’t send from the inbox subdomain. Check that Email Routing is enabled for it.';
   if (/LIMIT/i.test(code)) return 'Cloudflare’s sending limit was reached. Try again later.';

@@ -53,7 +53,7 @@ describe('daily review reminder', () => {
     const f = fakeEmail({ code: 'E_RECIPIENT_NOT_ALLOWED' });
     const r = await sendReminder(f.env, { test: true });
     expect(r.sent).toBe(false);
-    expect(r.reason).toMatch(/Destination addresses/);
+    expect(r.reason).toMatch(/Destination Addresses/);
   });
 
   it('writes a short, linked message', () => {

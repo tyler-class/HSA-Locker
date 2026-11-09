@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { mxStatus, routingStatus } from '../../src/shared/logic';
+import {
+  appDomain,
+  mxStatus,
+  nsStatus,
+  registrableDomain,
+  routingStatus,
+  suggestInboxSubdomain,
+} from '../../src/shared/logic';
 
 describe('inbox setup checks', () => {
   it('recognizes Cloudflare Email Routing MX records', () => {
@@ -39,5 +46,49 @@ describe('inbox setup checks', () => {
         'hsa.example.com',
       ).status,
     ).toBe('ok');
+  });
+});
+
+describe('the domain behind a hostname', () => {
+  it('takes the last two labels for ordinary domains', () => {
+    expect(registrableDomain('example.com')).toBe('example.com');
+    expect(registrableDomain('hsa.example.com')).toBe('example.com');
+    expect(registrableDomain('a.b.example.org.')).toBe('example.org');
+    expect(registrableDomain('HSA.Example.COM')).toBe('example.com');
+  });
+
+  it('keeps three labels under two-part suffixes like co.uk', () => {
+    expect(registrableDomain('hsa.example.co.uk')).toBe('example.co.uk');
+    expect(registrableDomain('example.co.uk')).toBe('example.co.uk');
+    expect(registrableDomain('app.example.com.au')).toBe('example.com.au');
+    expect(registrableDomain('co.uk')).toBeNull();
+  });
+
+  it('rejects things that are not domain names', () => {
+    expect(registrableDomain('localhost')).toBeNull();
+    expect(registrableDomain('192.168.1.10')).toBeNull();
+    expect(registrableDomain('')).toBeNull();
+    expect(registrableDomain('not a domain')).toBeNull();
+  });
+
+  it('knows the app’s own domain only on a custom domain', () => {
+    expect(appDomain('hsa-locker.someone.workers.dev')).toBeNull();
+    expect(appDomain('localhost')).toBeNull();
+    expect(appDomain('127.0.0.1')).toBeNull();
+    expect(appDomain('hsa.example.com')).toBe('example.com');
+    expect(appDomain('receipts.example.co.uk')).toBe('example.co.uk');
+    expect(suggestInboxSubdomain('example.com')).toBe('hsa-in.example.com');
+  });
+
+  it('recognizes Cloudflare nameservers', () => {
+    expect(
+      nsStatus([
+        { type: 2, data: 'ada.ns.cloudflare.com.' },
+        { type: 2, data: 'bob.ns.cloudflare.com.' },
+      ]).status,
+    ).toBe('cloudflare');
+    expect(nsStatus([{ type: 2, data: 'ns1.registrar.example.' }]).status).toBe('elsewhere');
+    expect(nsStatus(undefined).status).toBe('unknown');
+    expect(nsStatus([{ type: 6, data: 'soa' }]).status).toBe('unknown');
   });
 });

@@ -29,6 +29,24 @@ export interface Category {
   sort_order: number;
 }
 
+/** Settings → Providers: a provider and how many entries use it. */
+export interface ProviderUsage extends Provider {
+  entries: number;
+}
+
+/** A printed provider name that may be an existing provider, waiting for a decision. */
+export interface ProviderSuggestion {
+  raw: string;
+  entries: number;
+  /** The closest existing provider, if any. */
+  suggested_id: string | null;
+}
+
+/** Settings → Categories: a category and how many entries use it. */
+export interface CategoryUsage extends Category {
+  entries: number;
+}
+
 export interface SourceMeta {
   from?: string;
   to?: string;
@@ -123,7 +141,7 @@ export interface Settings {
   inbox_daily_cap: number;
   inbox_allowlist: string[];
   onboarded: boolean;
-  /** Where the daily review reminder goes (verified in Email Routing → Destination addresses). */
+  /** Where the daily review reminder goes (verified in Email Routing → Destination Addresses). */
   notify_email: string | null;
   notify_daily: boolean;
 }

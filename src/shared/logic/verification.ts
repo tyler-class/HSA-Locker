@@ -1,5 +1,5 @@
 // Mail providers send a confirmation message to a forwarding destination before they'll
-// auto-forward. These must not become documents; the app shows the code/link in Settings → Inbox.
+// auto-forward. These must not become documents; the app shows the code/link in Settings → Get receipts by email.
 // Add providers by adding a pattern.
 
 export interface VerificationPattern {

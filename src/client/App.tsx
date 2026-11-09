@@ -12,6 +12,7 @@ import { Review } from './routes/Review';
 import { Reimbursement } from './routes/Reimbursement';
 import { Settings } from './routes/Settings';
 import { InboxSettings } from './routes/InboxSettings';
+import { CategoriesSettings, ProvidersSettings } from './routes/ListSettings';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,6 +38,8 @@ const router = createBrowserRouter([
       { path: '/reimbursements/:id', element: <Reimbursement /> },
       { path: '/settings', element: <Settings /> },
       { path: '/settings/inbox', element: <InboxSettings /> },
+      { path: '/settings/providers', element: <ProvidersSettings /> },
+      { path: '/settings/categories', element: <CategoriesSettings /> },
       { path: '*', element: <Home /> },
     ],
   },

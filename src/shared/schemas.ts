@@ -28,6 +28,7 @@ export const categoryInput = z.object({
   sort_order: z.number().int().optional(),
 });
 export const categoryPatch = categoryInput.partial();
+export const categoryMerge = z.object({ into: z.string().min(1) });
 
 export const settingsPatch = z.object({
   hsa_cards: z

@@ -1,9 +1,10 @@
 // App state, settings, people, providers, categories, backup/restore, sample data, danger zone.
 import { Hono } from 'hono';
-import { applyHsaCards, withAlias } from '@shared/logic';
+import { applyHsaCards, matchProvider, withAlias } from '@shared/logic';
 import { PERSON_COLORS } from '@shared/lookups';
 import {
   categoryInput,
+  categoryMerge,
   categoryPatch,
   deleteAllInput,
   personInput,
@@ -23,7 +24,7 @@ import {
   type ExportRow,
   type HsaExport,
 } from '@shared/exportFormat';
-import type { AppState } from '@shared/types';
+import type { AppState, CategoryUsage, ProviderSuggestion, ProviderUsage } from '@shared/types';
 import {
   all,
   first,
@@ -265,6 +266,36 @@ admin.delete('/people/:id', async (c) => {
 
 // ---------- providers ----------
 
+/**
+ * Settings → Providers: every provider with how many entries use it, plus printed names that
+ * may be an existing provider (entries waiting with a provider suggestion), grouped by name.
+ */
+admin.get('/providers', async (c) => {
+  const db = c.env.DB;
+  const [providers, counts, pending] = await Promise.all([
+    loadProviders(db),
+    all<{ id: string; n: number }>(
+      db,
+      'SELECT provider_id AS id, COUNT(*) AS n FROM entries WHERE provider_id IS NOT NULL GROUP BY provider_id',
+    ),
+    all<{ raw: string; n: number }>(
+      db,
+      `SELECT e.provider_name_raw AS raw, COUNT(*) AS n FROM entries e
+         JOIN documents d ON d.id = e.document_id
+        WHERE e.provider_id IS NULL AND e.provider_name_raw IS NOT NULL
+          AND d.status != 'discarded' AND e.review_reasons_json LIKE '%provider_suggestion%'
+        GROUP BY lower(trim(e.provider_name_raw)) ORDER BY n DESC`,
+    ),
+  ]);
+  const used = new Map(counts.map((r) => [r.id, Number(r.n)]));
+  const list: ProviderUsage[] = providers.map((p) => ({ ...p, entries: used.get(p.id) ?? 0 }));
+  const suggestions: ProviderSuggestion[] = pending.map((r) => {
+    const m = matchProvider(r.raw, providers);
+    return { raw: r.raw, entries: Number(r.n), suggested_id: m.kind === 'none' ? null : m.id };
+  });
+  return c.json({ providers: list, suggestions });
+});
+
 admin.post('/providers', async (c) => {
   const input = await body(c, providerInput);
   const now = nowIso();
@@ -363,10 +394,7 @@ admin.post('/providers/:id/alias', async (c) => {
   });
 });
 
-admin.delete('/providers/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM providers WHERE id = ?').bind(c.req.param('id')).run();
-  return c.json({ ok: true });
-});
+// Providers aren't deleted: extraction would only recreate them. Merge or rename instead.
 
 // ---------- categories ----------
 
@@ -393,16 +421,76 @@ admin.post('/categories', async (c) => {
 
 admin.patch('/categories/:id', async (c) => {
   const input = await body(c, categoryPatch);
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  if (!(await first(db, 'SELECT 1 FROM categories WHERE id = ?', id))) throw notFound('Category');
+  if (
+    input.name !== undefined &&
+    (await first(
+      db,
+      'SELECT 1 FROM categories WHERE name = ? COLLATE NOCASE AND id != ?',
+      input.name,
+      id,
+    ))
+  )
+    throw new ApiError(409, 'exists', 'That category already exists.');
   const fields: Record<string, unknown> = {};
   if (input.name !== undefined) fields.name = input.name;
   if (input.sort_order !== undefined) fields.sort_order = input.sort_order;
   if (Object.keys(fields).length)
-    await updateStmt(c.env.DB, 'categories', c.req.param('id'), fields, { touch: false }).run();
+    await updateStmt(db, 'categories', id, fields, { touch: false }).run();
   return c.json({ ok: true });
 });
 
+/** Settings → Categories: every category with how many entries use it. */
+admin.get('/categories', async (c) => {
+  const db = c.env.DB;
+  const [categories, counts] = await Promise.all([
+    loadCategories(db),
+    all<{ id: string; n: number }>(
+      db,
+      'SELECT category_id AS id, COUNT(*) AS n FROM entries WHERE category_id IS NOT NULL GROUP BY category_id',
+    ),
+  ]);
+  const used = new Map(counts.map((r) => [r.id, Number(r.n)]));
+  const list: CategoryUsage[] = categories.map((x) => ({ ...x, entries: used.get(x.id) ?? 0 }));
+  return c.json({ categories: list });
+});
+
+/** Moves a category's entries to another category, then deletes it. */
+admin.post('/categories/:id/merge', async (c) => {
+  const db = c.env.DB;
+  const { into } = await body(c, categoryMerge);
+  const fromId = c.req.param('id');
+  if (fromId === into) throw new ApiError(400, 'invalid', 'Pick a different category.');
+  const [from, to] = await Promise.all([
+    first(db, 'SELECT 1 FROM categories WHERE id = ?', fromId),
+    first(db, 'SELECT 1 FROM categories WHERE id = ?', into),
+  ]);
+  if (!from || !to) throw notFound('Category');
+  const [moved] = await db.batch([
+    db
+      .prepare('UPDATE entries SET category_id = ?, updated_at = ? WHERE category_id = ?')
+      .bind(into, nowIso(), fromId),
+    db.prepare('DELETE FROM categories WHERE id = ?').bind(fromId),
+  ]);
+  return c.json({ ok: true, moved: moved?.meta.changes ?? 0 });
+});
+
+/** Only an unused category can be deleted; a used one is merged into another instead. */
 admin.delete('/categories/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(c.req.param('id')).run();
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  const n =
+    (await first<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM entries WHERE category_id = ?', id))
+      ?.n ?? 0;
+  if (n > 0)
+    throw new ApiError(
+      409,
+      'in_use',
+      `${n} entr${n === 1 ? 'y uses' : 'ies use'} this category. Merge it into another instead.`,
+    );
+  await db.prepare('DELETE FROM categories WHERE id = ?').bind(id).run();
   return c.json({ ok: true });
 });
 
