@@ -205,6 +205,20 @@ export function Settings() {
         action={<AboutButton variant="header" className="md:hidden" />}
       />
 
+      <SectionLabel icon="palette">Appearance</SectionLabel>
+      <div className="px-6 pt-4 pb-2">
+        <SlideToggle<Theme>
+          label="Appearance"
+          value={theme}
+          onChange={setTheme}
+          options={[
+            ['light', 'Light'],
+            ['dark', 'Dark'],
+            ['system', 'System'],
+          ]}
+        />
+      </div>
+
       <SectionLabel icon="inbox">Inbox</SectionLabel>
       <div className="px-6 pt-1">
         <Row icon="mail" to="/settings/inbox">
@@ -230,6 +244,8 @@ export function Settings() {
           </p>
         )}
       </div>
+
+      <Notifications />
 
       <SectionLabel icon="users">People</SectionLabel>
       <PeopleEditor state={state} />
@@ -290,8 +306,6 @@ export function Settings() {
       <SectionLabel icon="layers">Categories</SectionLabel>
       <CategoriesEditor state={state} />
 
-      <Notifications />
-
       <SectionLabel icon="ai">Reading documents</SectionLabel>
       <div className="flex flex-col gap-3 px-6 pt-4 text-sm">
         <p className="text-ink">
@@ -339,6 +353,18 @@ export function Settings() {
         </div>
       </div>
 
+      <ConnectAISection />
+
+      {/* Already installed: nothing to do here, so no section. */}
+      {!isStandalone() && (
+        <>
+          <SectionLabel icon="phone">Install on your phone</SectionLabel>
+          <div className="px-6 py-4">
+            <InstallHint />
+          </div>
+        </>
+      )}
+
       <SectionLabel icon="archive">Backup</SectionLabel>
       <p className="px-6 pt-4 text-sm text-soft">
         The data backup is one JSON file. The documents export is a ZIP of every original file,
@@ -382,38 +408,12 @@ export function Settings() {
         <ErrorText>{restoreError}</ErrorText>
       </div>
 
-      <ConnectAISection />
-
-      <SectionLabel icon="palette">Appearance</SectionLabel>
-      <div className="px-6 pt-4 pb-2">
-        <SlideToggle<Theme>
-          label="Appearance"
-          value={theme}
-          onChange={setTheme}
-          options={[
-            ['light', 'Light'],
-            ['dark', 'Dark'],
-            ['system', 'System'],
-          ]}
-        />
-      </div>
-
       <UpdatesSection
         setUp={buildFlags().updatesOn || state.kit.updates_set_up}
         onSetUp={() => run(() => api.patch('/settings', { updates_set_up: true }))}
         telemetry={state.kit.telemetry}
         onTelemetry={(telemetry) => run(() => api.patch('/settings', { telemetry }))}
       />
-
-      {/* Already installed: nothing to do here, so no section. */}
-      {!isStandalone() && (
-        <>
-          <SectionLabel icon="phone">Install on your phone</SectionLabel>
-          <div className="px-6 py-4">
-            <InstallHint />
-          </div>
-        </>
-      )}
 
       <SectionLabel icon="user">Account</SectionLabel>
       <div className="px-6 pt-2">
