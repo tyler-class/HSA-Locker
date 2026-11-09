@@ -183,7 +183,7 @@ export function Ledger() {
       <div
         className={cx(
           'fixed inset-x-0 z-20 px-4 transition-transform md:left-60',
-          'bottom-[calc(68px+env(safe-area-inset-bottom,0px))] md:bottom-4',
+          'bottom-[calc(var(--tabbar-clear)+12px)] md:bottom-4',
           chosen.length ? 'translate-y-0' : 'pointer-events-none translate-y-[200%]',
         )}
       >

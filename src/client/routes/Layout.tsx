@@ -2,13 +2,14 @@ import { useLayoutEffect } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { AboutButton } from '../components/AboutSheet';
 import { DocViewer } from '../components/DocViewer';
-import { Icon, type IconName } from '../components/Icon';
+import { GlassTabBar, type GlassTab } from '../components/GlassTabBar';
+import { Icon } from '../components/Icon';
 import { cx } from '../components/ui';
 import { useNotifications } from '../lib/notifications';
 import { useAppState } from '../lib/queries';
 import { useTabSwipe } from '../lib/tabSwipe';
 
-const TABS: [string, string, IconName][] = [
+const TABS: GlassTab[] = [
   ['/', 'Home', 'home'],
   ['/ledger', 'Ledger', 'receipt'],
   ['/review', 'Review', 'search'],
@@ -113,7 +114,7 @@ export function Layout() {
         </div>
       </aside>
 
-      <main className="mx-auto w-full max-w-2xl pb-[calc(72px+env(safe-area-inset-bottom,0px))] md:max-w-4xl md:px-6 md:pt-4 md:pb-10">
+      <main className="mx-auto w-full max-w-2xl pb-[calc(var(--tabbar-clear)+16px)] md:max-w-4xl md:px-6 md:pt-4 md:pb-10">
         {inFlight > 0 && (
           <p
             className="mx-5 mt-1 flex items-center gap-2 text-xs text-soft md:hidden"
@@ -128,27 +129,12 @@ export function Layout() {
 
       <DocViewer />
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 pb-safe backdrop-blur md:hidden">
-        <div className="mx-auto grid max-w-2xl grid-cols-4 pt-2 pb-2">
-          {TABS.map(([to, label, icon]) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={cx(
-                'relative flex flex-col items-center gap-1 text-[11px]',
-                active === to ? 'text-accent' : 'text-faint',
-              )}
-              aria-current={active === to ? 'page' : undefined}
-            >
-              <Icon name={icon} size={23} />
-              {label}
-              {to === '/review' && (
-                <Badge n={review} className="absolute -top-1 left-[calc(50%+7px)]" />
-              )}
-            </NavLink>
-          ))}
-        </div>
-      </nav>
+      {/* Phones: tabs in a floating glass capsule along the bottom. */}
+      <GlassTabBar
+        tabs={TABS}
+        active={active}
+        badges={review ? { '/review': <Badge n={review} className="ring-2 ring-bg" /> } : undefined}
+      />
     </div>
   );
 }
