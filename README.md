@@ -148,7 +148,7 @@ If you connected an AI assistant, connect it again with the new address.
 
 ## Anonymous usage counts
 
-Once a day your copy tells HSA Locker's developer that it exists: a random id it made for itself, its version, how many documents, entries and reimbursements it has (counts only), how many files it stores, and whether automatic updates are on. Never names, contents or anything you type, and no IP address is kept. It shows how many copies are in use. Turn it off in **Settings → Updates → Share anonymous usage counts**.
+Once a day your copy tells HSA Locker's developer that it exists: a random id it made for itself, its version, how many documents, entries and reimbursements it has (counts only), how many files it stores, and whether automatic updates are on. Never names, contents or anything you type, and no IP address is kept. It shows how many copies are in use. Turn it off in **Settings → Updates → Share anonymous usage counts**: your copy sends one last message saying it's off, then nothing.
 
 <!-- kit:readme:end -->
 
