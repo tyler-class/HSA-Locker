@@ -7,9 +7,13 @@ import {
   matchPerson,
   matchProvider,
   nameKey,
+  newPersonName,
   reviewReasons,
+  suggestPerson,
+  withAlias,
 } from '@shared/logic';
-import type { DocKind, Entry } from '@shared/types';
+import { PERSON_COLORS } from '@shared/lookups';
+import type { DocKind, Entry, Person } from '@shared/types';
 import {
   all,
   first,
@@ -187,6 +191,50 @@ async function readDocument(
   };
 }
 
+/**
+ * The person for a printed patient name: a match, else a new person (created once per document)
+ * when the name is clearly a name and isn't close to someone already there. A close match
+ * ("Wm. Smith" for William Smith) or a placeholder ("Patient", "Self") gets no person, so the
+ * entry goes to Review as an unknown patient.
+ */
+async function personFor(
+  db: D1Database,
+  raw: string | null,
+  people: Person[],
+  familyNames: string[],
+  created: Map<string, string>,
+  now: string,
+): Promise<string | null> {
+  const match = matchPerson(raw, people, familyNames);
+  if (match) return match.id;
+  const name = newPersonName(raw, familyNames);
+  if (!name) return null;
+  const key = nameKey(name);
+  const made = created.get(key);
+  if (made) return made;
+  if (suggestPerson(raw, people, familyNames)) return null;
+  // Like Settings → People: the next colour in turn, at the end of the list. The printed name is
+  // kept as an alias when it differs ("JANE SMITH (DEPENDENT)"), so the next receipt matches it.
+  const person: Person = {
+    id: newId(),
+    name,
+    relationship: null,
+    aliases: withAlias(name, [], raw!.trim()),
+    color: PERSON_COLORS[people.length % PERSON_COLORS.length]!,
+    sort_order: people.length,
+  };
+  const { aliases, ...cols } = person;
+  await insertStmt(db, 'people', {
+    ...cols,
+    aliases_json: JSON.stringify(aliases),
+    created_at: now,
+    updated_at: now,
+  }).run();
+  people.push(person);
+  created.set(key, person.id);
+  return person.id;
+}
+
 /** Builds entry rows from drafts: people, providers, categories, HSA cards, duplicates, review. */
 export async function buildEntries(
   db: D1Database,
@@ -204,9 +252,17 @@ export async function buildEntries(
   const now = nowIso();
   const rows: Record<string, unknown>[] = [];
   const created = new Map<string, string>(); // provider key → id, within this document
+  const createdPeople = new Map<string, string>(); // new person's name key → id, likewise
 
   for (const [i, d] of drafts.entries()) {
-    const person = matchPerson(d.patient_name_raw, people, settings.family_names);
+    const personId = await personFor(
+      db,
+      d.patient_name_raw,
+      people,
+      settings.family_names,
+      createdPeople,
+      now,
+    );
     let providerId: string | null = null;
     let providerSuggested = false;
     if (d.provider_name_raw) {
@@ -235,7 +291,7 @@ export async function buildEntries(
       type: d.type,
       service_date: d.service_date,
       payment_date: d.payment_date,
-      person_id: person?.id ?? null,
+      person_id: personId,
       provider_id: providerId,
       provider_name_raw: d.provider_name_raw,
       description: d.description,

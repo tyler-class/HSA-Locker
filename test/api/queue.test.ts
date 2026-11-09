@@ -50,17 +50,23 @@ describe('work queue', () => {
 
   it('reclaims documents stuck in processing and the sweeper picks up pending work', async () => {
     const stuck = await store(
-      fakePdf('Stuck $45.00', receiptExtraction({ appointment_date: '2024-12-01' })),
+      fakePdf(
+        'Stuck $45.00',
+        receiptExtraction({ appointment_date: '2024-12-01', patient_name: 'Patient' }),
+      ),
     );
     await env.DB.prepare("UPDATE documents SET status = 'processing', updated_at = ? WHERE id = ?")
       .bind(new Date(Date.now() - 11 * 60_000).toISOString(), stuck)
       .run();
     const pending = await store(
-      fakePdf('Pending $45.00', receiptExtraction({ appointment_date: '2024-12-02' })),
+      fakePdf(
+        'Pending $45.00',
+        receiptExtraction({ appointment_date: '2024-12-02', patient_name: 'Patient' }),
+      ),
     );
     const n = await sweep(env, 10);
     expect(n).toBeGreaterThanOrEqual(2);
-    // No people exist in this file's database, so both land in review (unknown patient).
+    // The patient is a placeholder, not a name, so both land in review (unknown patient).
     expect((await row(stuck))!.status).toBe('needs_review');
     expect((await row(pending))!.status).toBe('needs_review');
     expect((await row(stuck))!.attempts).toBe(1);

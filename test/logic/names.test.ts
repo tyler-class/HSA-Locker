@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   matchPerson,
   matchProvider,
+  newPersonName,
   normalizePatientName,
   providersLooselyEqual,
+  suggestPerson,
   withAlias,
 } from '../../src/shared/logic';
 
@@ -92,5 +94,58 @@ describe('providers', () => {
     expect(withAlias('Sam', ['Sammy'], 'sammy ')).toEqual(['Sammy']);
     expect(withAlias('Sam', [], 'Samuel')).toEqual(['Samuel']);
     expect(withAlias('Sam', [], 'SAM')).toEqual([]);
+  });
+});
+
+describe('new people from printed names', () => {
+  it('tidies a clear name: trimmed, spaces collapsed, ALL CAPS title-cased', () => {
+    expect(newPersonName('  Jordan   Rivera ')).toBe('Jordan Rivera');
+    expect(newPersonName('JORDAN RIVERA')).toBe('Jordan Rivera');
+    expect(newPersonName("MARY-KATE O'NEIL")).toBe("Mary-Kate O'Neil");
+    expect(newPersonName('Jordan Rivera (dependent)')).toBe('Jordan Rivera');
+    expect(newPersonName('Rivera, Jordan', ['Rivera'])).toBe('Jordan Rivera');
+    expect(newPersonName('Jo')).toBe('Jo');
+  });
+
+  it('skips anything that isn’t clearly a name', () => {
+    for (const junk of [
+      null,
+      '',
+      '   ',
+      'J',
+      'J.',
+      'Patient 2',
+      'Member 0012345',
+      'Patient',
+      'PATIENT NAME',
+      'Guarantor',
+      'Self',
+      'Subscriber',
+      'Member',
+      'Insured',
+      'Dependent',
+      'N/A',
+      'n/a',
+      'Unknown',
+    ])
+      expect(newPersonName(junk), String(junk)).toBeNull();
+  });
+
+  it('suggests a close match instead of a new person', () => {
+    const household = [
+      ...people,
+      { id: 'will', name: 'William Smith', aliases: [] },
+      { id: 'jon', name: 'Jon Rivera', aliases: [] },
+    ];
+    const s = (raw: string) => suggestPerson(raw, household, FAMILY);
+    expect(s('Wm. Smith')).toEqual({ id: 'will', reason: 'abbreviated' });
+    expect(s('W Smith')).toEqual({ id: 'will', reason: 'abbreviated' });
+    expect(s('Smith William')).toEqual({ id: 'will', reason: 'reordered' });
+    expect(s('John Rivera')).toEqual({ id: 'jon', reason: 'similar' });
+    // A lone first name shared with someone (two Sams would leave matchPerson unsure).
+    expect(s('Sam')).toEqual({ id: 'sam', reason: 'first_name' });
+    expect(s('Sam Jones')).toBeNull();
+    expect(s('Wendy Smith')).toBeNull();
+    expect(s('Jordan Lee')).toBeNull();
   });
 });

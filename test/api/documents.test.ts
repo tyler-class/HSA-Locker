@@ -88,7 +88,7 @@ describe('upload and extraction', () => {
           },
           {
             ...receiptExtraction().line_items[0],
-            patient_name: 'Jordan Smith',
+            patient_name: 'Sammy Example',
             amount: '20.00',
             appointment_date: '2024-05-02',
           },
@@ -100,14 +100,93 @@ describe('upload and extraction', () => {
     const state = await api.get<{ people: { id: string; name: string }[] }>('/state');
     const alex = state.data.people.find((p) => p.name === 'Alex')!;
     expect(entries[0]!.person_id).toBe(alex.id);
+    // Close to Sam Example: not a new person, so it goes to Review.
     expect(entries[1]!.person_id).toBeNull();
     expect(entries[1]!.review_reasons).toContain('unknown_patient');
+    expect(state.data.people.map((p) => p.name)).not.toContain('Sammy Example');
 
     // "Add as alias to X" resolves it.
-    const r = await api.post<{ resolved: number }>(`/people/${alex.id}/alias`, {
-      alias: 'Jordan Smith',
+    const sam = state.data.people.find((p) => p.name === 'Sam Example')!;
+    const r = await api.post<{ resolved: number }>(`/people/${sam.id}/alias`, {
+      alias: 'Sammy Example',
     });
     expect(r.data.resolved).toBe(1);
+  });
+
+  it('adds a new person for a new name, once, and the next receipt finds them', async () => {
+    type Person = { id: string; name: string; aliases: string[]; color: string };
+    const people = async () =>
+      (await api.get<{ people: Person[] }>('/state')).data.people.filter((p) =>
+        p.name.startsWith('Jordan'),
+      );
+    const line = (patient_name: string, amount: string, appointment_date: string) => ({
+      ...receiptExtraction().line_items[0],
+      patient_name,
+      amount,
+      appointment_date,
+      payment_date: appointment_date,
+    });
+    // Two lines for the same new name, printed in capitals: one person, both lines theirs.
+    const up = await upload(
+      api,
+      fakePdf('Jordan Rivera $31.00 $32.00', {
+        document_type: 'Receipt',
+        line_items: [
+          line('JORDAN  RIVERA', '31.00', '2024-07-01'),
+          line(' Jordan Rivera ', '32.00', '2024-07-02'),
+        ],
+      }),
+      'new-person.pdf',
+    );
+    const { document, entries } = await settle(up.data.document.id);
+    const [jordan, ...others] = await people();
+    expect(others).toEqual([]);
+    expect(jordan).toMatchObject({ name: 'Jordan Rivera', aliases: [] });
+    expect(jordan!.color).toBeTruthy();
+    expect(entries.map((e) => e.person_id)).toEqual([jordan!.id, jordan!.id]);
+    expect(entries.flatMap((e) => e.review_reasons)).toEqual([]);
+    expect(document.status).toBe('processed');
+
+    // A second receipt for them reuses the person.
+    const again = await upload(
+      api,
+      fakePdf('Jordan Rivera $33.00', {
+        document_type: 'Receipt',
+        line_items: [line('Jordan Rivera', '33.00', '2024-07-09')],
+      }),
+      'new-person-again.pdf',
+    );
+    const second = await settle(again.data.document.id);
+    expect(second.entries[0]!.person_id).toBe(jordan!.id);
+    expect(await people()).toHaveLength(1);
+  });
+
+  it('adds nobody for a near match or a placeholder; those go to Review', async () => {
+    const before = (await api.get<{ people: unknown[] }>('/state')).data.people.length;
+    await api.post('/people', { name: 'William Smith' });
+    const names = ['Wm. Smith', 'Patient', 'GUARANTOR', 'Self', 'N/A', 'Unknown', 'J', 'Child 2'];
+    const up = await upload(
+      api,
+      fakePdf('Placeholders $41.00', {
+        document_type: 'Receipt',
+        line_items: names.map((patient_name, i) => ({
+          ...receiptExtraction().line_items[0],
+          patient_name,
+          amount: '41.00',
+          appointment_date: `2024-08-${String(i + 1).padStart(2, '0')}`,
+          payment_date: `2024-08-${String(i + 1).padStart(2, '0')}`,
+        })),
+      }),
+      'placeholders.pdf',
+    );
+    const { document, entries } = await settle(up.data.document.id);
+    expect(entries).toHaveLength(names.length);
+    for (const e of entries) {
+      expect(e.person_id).toBeNull();
+      expect(e.review_reasons).toContain('unknown_patient');
+    }
+    expect(document.status).toBe('needs_review');
+    expect((await api.get<{ people: unknown[] }>('/state')).data.people).toHaveLength(before + 1);
   });
 
   it('keeps EOB lines out of the money and marks HSA-card receipts', async () => {

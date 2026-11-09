@@ -120,7 +120,8 @@ async function receipt(label: string, provider = 'Lakeside Pediatrics') {
     bytes: new TextEncoder().encode(
       fakePdf(
         `${label} Amount paid $45.00`,
-        receiptExtraction({ patient_name: 'Nobody Known', provider_name: provider }),
+        // A placeholder for the patient: no person, so it lands in Review.
+        receiptExtraction({ patient_name: 'Patient', provider_name: provider }),
       ),
     ),
     filename: `${label}.pdf`,

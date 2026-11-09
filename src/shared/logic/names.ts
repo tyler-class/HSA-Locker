@@ -196,3 +196,85 @@ export function withAlias(name: string, aliases: string[], alias: string): strin
   if (nameKey(name) === k || aliases.some((x) => nameKey(x) === k)) return aliases;
   return [...aliases, a];
 }
+
+/** Words printed where a name should be: a role or placeholder, never a person's name. */
+const NOT_A_NAME = new Set([
+  'patient',
+  'guarantor',
+  'self',
+  'subscriber',
+  'member',
+  'insured',
+  'dependent',
+  'unknown',
+  'n a',
+  'na',
+  'none',
+]);
+
+/**
+ * The name for a new person from a printed patient name, tidied (normalizePatientName: trimmed,
+ * spaces collapsed, ALL CAPS → Title Case), or null when it isn't clearly a name: empty, a
+ * single character, any digits, or a placeholder or role ("Patient", "Self", "N/A", …).
+ */
+export function newPersonName(
+  raw: string | null | undefined,
+  familyNames: string[] = [],
+): string | null {
+  if (!raw?.trim() || /\d/.test(raw)) return null;
+  const name = normalizePatientName(raw, familyNames);
+  const key = nameKey(name);
+  if (key.replace(/ /g, '').length < 2) return null;
+  if (NOT_A_NAME.has(key) || key.split(' ').some((t) => NOT_A_NAME.has(t))) return null;
+  return name;
+}
+
+/** Whether `short` could be shortened from `long` ("wm" from "william", "w" from "will"). */
+const abbreviates = (short: string, long: string) => {
+  if (short[0] !== long[0]) return false;
+  let i = 0;
+  for (const c of long) if (c === short[i]) i++;
+  return i === short.length;
+};
+
+export interface PersonSuggestion {
+  id: string;
+  reason: 'reordered' | 'similar' | 'abbreviated' | 'first_name';
+}
+
+/**
+ * A person a printed name that matchPerson didn't match might still be: the same words in another
+ * order, a near-identical spelling, a shortened first name with the same last name ("Wm. Smith" for
+ * William Smith), or a lone first name shared with someone. Never assigned automatically; it only
+ * stops a new person being created, so the entry goes to Review instead.
+ */
+export function suggestPerson(
+  raw: string | null | undefined,
+  people: PersonLike[],
+  familyNames: string[] = [],
+): PersonSuggestion | null {
+  if (!raw?.trim()) return null;
+  const key = nameKey(normalizePatientName(raw, familyNames));
+  if (!key) return null;
+  const tokens = key.split(' ');
+  const sorted = [...tokens].sort().join(' ');
+  for (const p of people) {
+    for (const n of [p.name, ...p.aliases]) {
+      const k = nameKey(normalizePatientName(n, familyNames));
+      if (!k) continue;
+      const t = k.split(' ');
+      if ([...t].sort().join(' ') === sorted) return { id: p.id, reason: 'reordered' };
+      if (similarity(key, k) >= 0.8) return { id: p.id, reason: 'similar' };
+      if (
+        tokens.length > 1 &&
+        t.length > 1 &&
+        tokens.at(-1) === t.at(-1) &&
+        (abbreviates(tokens[0]!, t[0]!) || abbreviates(t[0]!, tokens[0]!))
+      )
+        return { id: p.id, reason: 'abbreviated' };
+      if ((tokens.length === 1 || t.length === 1) && tokens[0] === t[0])
+        return { id: p.id, reason: 'first_name' };
+    }
+  }
+  return null;
+}
