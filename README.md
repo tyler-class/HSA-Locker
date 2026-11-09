@@ -4,7 +4,7 @@ Keep every medical receipt and EOB for your HSA in one place, and always know ho
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/HSA-Locker)
 
-<!-- 📸 SCREENSHOT docs/screenshots/hero.png: HSA Locker on a phone: Home with reimbursable, reimbursed and documented totals (sample household) -->
+![HSA Locker on a laptop and a phone with sample data: Home with the reimbursable, reimbursed and documented totals and the Years table, and Review showing a photographed pharmacy receipt](docs/screenshots/hero.png)
 
 - **Every original, kept.** PDFs, photos and the emails they came in are stored privately in your own Cloudflare R2 bucket and open only through the app.
 - **Read for you.** Each document is read by an AI model (Workers AI by default, inside your Cloudflare account) into dates, patient, provider, amount and card. Receipts become one entry; EOBs become one line per service.
@@ -17,6 +17,12 @@ Keep every medical receipt and EOB for your HSA in one place, and always know ho
 - **Exports.** A CSV of the ledger (any filter), a JSON backup, and a ZIP of every original named by date, person, provider and amount: an audit packet.
 - **AI assistants.** Connect Claude, ChatGPT or any MCP-capable assistant to ask what’s reimbursable or record a reimbursement.
 - **Yours.** It runs on your own Cloudflare account. No third-party scripts. The only thing it sends out is an anonymous daily count you can switch off, and nothing from your receipts or documents is ever in it.
+
+![The Ledger filtered to Reimbursable, with three receipts selected and the bar to mark them reimbursed](docs/screenshots/ledger.png)
+
+![Review: a dental receipt PDF beside its details, flagged because the patient's name isn't one of your people](docs/screenshots/review.png)
+
+![A ledger entry open with its document: a photographed pharmacy receipt beside the date, patient, provider and amount](docs/screenshots/entry.png)
 
 One deployment is one household. HSA Locker isn’t tax advice and makes no HIPAA compliance claims.
 
@@ -86,7 +92,7 @@ Click **Create and deploy**. Cloudflare copies the code to your GitHub, creates 
 
 Open it, sign in with your password, and you're done. Bookmark it, or add it to your phone's home screen.
 
-<!-- 📸 SCREENSHOT docs/screenshots/install-7-signed-in.png: HSA Locker right after signing in -->
+![HSA Locker right after signing in](docs/screenshots/install-7-signed-in.png)
 
 ### 8. Set up automatic updates (recommended)
 
@@ -97,7 +103,7 @@ Your copy updates itself every Monday once you allow it. That takes one click, o
 
 That brings in the latest HSA Locker straight away, then every week. See [Updates](#updates) for how it works.
 
-<!-- 📸 SCREENSHOT docs/screenshots/install-8-updates.png: Settings → Updates with the Set up automatic updates button -->
+![Settings → Updates with the Set up automatic updates button](docs/screenshots/install-8-updates.png)
 <!-- 📸 SCREENSHOT docs/screenshots/install-8-commit.png: GitHub's new-file page with the update file filled in, and the Commit changes button -->
 
 ## Notifications
@@ -161,7 +167,7 @@ Once a day your copy tells HSA Locker's developer that it exists: a random id it
 
 Details are in [docs/email-setup.md](docs/email-setup.md).
 
-<!-- 📸 SCREENSHOT docs/screenshots/inbox-setup.png: Settings → Receipt forwarding address with the steps for the forwarding address -->
+![Settings → Receipt forwarding address with the steps for the forwarding address](docs/screenshots/inbox-setup.png)
 
 ## Choose the AI model
 
@@ -185,6 +191,8 @@ Open your HSA Locker link on the phone, then:
 - **Android:** in Chrome, open the menu and tap **Install app**.
 
 Upload has a **Take photo** button for paper receipts.
+
+![HSA Locker on a phone in dark mode: Home with the totals, the Years table and the tab bar](docs/screenshots/phone-dark.png)
 
 ## Connect an AI assistant
 
