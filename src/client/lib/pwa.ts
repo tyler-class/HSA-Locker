@@ -76,3 +76,8 @@ export function startPwa() {
   setInterval(() => applyIfIdle(), 3000);
   setInterval(() => document.visibilityState === 'visible' && check(), 30 * 60 * 1000);
 }
+
+/** Running as the installed app (home screen), not in a browser tab. */
+export const isStandalone = () =>
+  window.matchMedia?.('(display-mode: standalone)').matches ||
+  (navigator as { standalone?: boolean }).standalone === true;

@@ -5,6 +5,7 @@ import { exportFilename, extForMime, uniqueNames } from '@shared/logic';
 import { AboutButton } from '../components/AboutSheet';
 import { Icon } from '../components/Icon';
 import { InstallHint } from '../components/InstallHint';
+import { isStandalone } from '../lib/pwa';
 import { useToast } from '../components/Toast';
 import {
   cx,
@@ -396,10 +397,15 @@ export function Settings() {
         onTelemetry={(telemetry) => run(() => api.patch('/settings', { telemetry }))}
       />
 
-      <SectionLabel icon="phone">Install on your phone</SectionLabel>
-      <div className="px-6 py-4">
-        <InstallHint />
-      </div>
+      {/* Already installed: nothing to do here, so no section. */}
+      {!isStandalone() && (
+        <>
+          <SectionLabel icon="phone">Install on your phone</SectionLabel>
+          <div className="px-6 py-4">
+            <InstallHint />
+          </div>
+        </>
+      )}
 
       <SectionLabel icon="user">Account</SectionLabel>
       <div className="px-6 pt-2">

@@ -3,6 +3,7 @@ import { AboutButton } from '../components/AboutSheet';
 import { Icon, type IconName } from '../components/Icon';
 import { cx } from '../components/ui';
 import { useAppState } from '../lib/queries';
+import { useTabSwipe } from '../lib/tabSwipe';
 
 const TABS: [string, string, IconName][] = [
   ['/', 'Home', 'home'],
@@ -10,6 +11,14 @@ const TABS: [string, string, IconName][] = [
   ['/review', 'Review', 'search'],
   ['/settings', 'Settings', 'settings'],
 ];
+
+const TAB_PATHS = TABS.map(([to]) => to);
+
+/** The tab whose main page this is (swiping between tabs works there), or null deeper in. */
+function tabRoot(path: string): string | null {
+  const p = path.replace(/\/+$/, '') || '/';
+  return TAB_PATHS.includes(p) ? p : null;
+}
 
 function activeTab(path: string): string {
   for (const p of ['/ledger', '/review', '/settings']) if (path.startsWith(p)) return p;
@@ -35,6 +44,7 @@ function Badge({ n, className }: { n: number; className?: string }) {
 export function Layout() {
   const { pathname } = useLocation();
   const active = activeTab(pathname);
+  useTabSwipe(TAB_PATHS, tabRoot(pathname));
   const state = useAppState();
   const review = state.data?.counts.review_documents ?? 0;
   const inFlight = state.data?.counts.in_flight ?? 0;
@@ -115,10 +125,10 @@ export function Layout() {
               )}
               aria-current={active === to ? 'page' : undefined}
             >
-              <Icon name={icon} />
+              <Icon name={icon} size={23} />
               {label}
               {to === '/review' && (
-                <Badge n={review} className="absolute -top-1 left-[calc(50%+6px)]" />
+                <Badge n={review} className="absolute -top-1 left-[calc(50%+7px)]" />
               )}
             </NavLink>
           ))}
