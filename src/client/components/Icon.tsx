@@ -6,6 +6,12 @@ const P = {
   inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>',
   review: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/>',
   camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  grip: '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',
+  eyeOff:
+    '<path d="M10.6 5.6c.5-.1.9-.1 1.4-.1 6 0 10 6.5 10 6.5a17 17 0 0 1-2.4 3.2M6.6 6.6C4 8.3 2 12 2 12s4 7 10 7c1.9 0 3.5-.6 4.9-1.4M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/>',
+  colFull: '<rect x="3.5" y="5" width="17" height="14" rx="2"/>',
+  colHalf: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M12 5v14"/>',
+  chart: '<path d="M3.5 20.5h17M7 17.5v-6M10.5 17.5V6M14 17.5v-4M17.5 17.5V9"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
   card: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>',

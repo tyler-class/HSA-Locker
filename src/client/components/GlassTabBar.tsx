@@ -206,7 +206,8 @@ export function GlassTabBar({
     <nav className="glass-bar md:hidden" aria-label="Main" data-no-tab-swipe>
       <div
         ref={bar}
-        className="relative grid h-full grid-cols-4 px-1"
+        className="relative grid h-full px-1"
+        style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={(e) => finish(e, false)}

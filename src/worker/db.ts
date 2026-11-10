@@ -5,6 +5,7 @@ import type {
   DocumentSummary,
   Entry,
   ExcludedReason,
+  InsightsPanel,
   LedgerEntry,
   Person,
   Provider,
@@ -76,6 +77,21 @@ export const marks = (n: number) => Array.from({ length: n }, () => '?').join(',
 
 const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const s = (v: unknown) => (v === null || v === undefined ? null : String(v));
+/** A saved Insights layout; anything malformed is dropped (the board falls back to defaults). */
+function panels(v: string | undefined): InsightsPanel[] {
+  try {
+    const a: unknown = JSON.parse(v ?? '[]');
+    if (!Array.isArray(a)) return [];
+    return a.flatMap((p: Partial<InsightsPanel>) =>
+      p && typeof p.id === 'string' && (p.size === 'half' || p.size === 'full')
+        ? [{ id: p.id, size: p.size, hidden: p.hidden === true }]
+        : [],
+    );
+  } catch {
+    return [];
+  }
+}
+
 export const arr = (v: unknown): string[] => {
   try {
     const p = JSON.parse(String(v ?? '[]'));
@@ -270,5 +286,6 @@ export async function loadSettings(db: D1Database): Promise<Settings> {
     notify_email: m.get('notify_email') || null,
     notify_daily: m.get('notify_daily') === '1',
     notify_milestone_cents: num(m.get('notify_milestone_cents'), MILESTONE_DEFAULT_CENTS),
+    insights_layout: panels(m.get('insights_layout_json')),
   };
 }

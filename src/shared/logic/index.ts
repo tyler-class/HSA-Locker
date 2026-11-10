@@ -10,3 +10,4 @@ export * from './csv';
 export * from './filter';
 export * from './dns';
 export * from './notify';
+export * from './insights';

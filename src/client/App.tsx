@@ -7,6 +7,7 @@ import { ToastProvider } from './components/Toast';
 import { Login, SetupNeeded } from './routes/Login';
 import { Layout } from './routes/Layout';
 import { Home } from './routes/Home';
+import { Insights } from './routes/Insights';
 import { Ledger } from './routes/Ledger';
 import { Review } from './routes/Review';
 import { Reimbursement } from './routes/Reimbursement';
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
       { path: '/ledger', element: <Ledger /> },
       { path: '/review', element: <Review /> },
       { path: '/review/:id', element: <Review /> },
+      { path: '/insights', element: <Insights /> },
       { path: '/reimbursements/:id', element: <Reimbursement /> },
       { path: '/settings', element: <Settings /> },
       { path: '/settings/inbox', element: <InboxSettings /> },

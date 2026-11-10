@@ -85,6 +85,17 @@ export const settingsPatch = z.object({
     .max(100_000_000)
     .refine((c) => c % 100 === 0, 'Use whole dollars.')
     .optional(),
+  /** Insights panel order, width and visibility. */
+  insights_layout: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(40),
+        size: z.enum(['half', 'full']),
+        hidden: z.boolean(),
+      }),
+    )
+    .max(40)
+    .optional(),
   /** Selfhost Kit: send the anonymous daily check-in (counts only). */
   telemetry: z.boolean().optional(),
   /** Selfhost Kit: the update workflow was added to this copy's GitHub repo. */
