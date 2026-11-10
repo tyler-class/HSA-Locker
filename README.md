@@ -29,6 +29,10 @@ It's also MCP-enabled, so you can ask an AI assistant what's reimbursable, fix o
 
 ![A ledger entry open with its document: a photographed pharmacy receipt beside the date, patient, provider and amount](docs/screenshots/entry.png)
 
+**Ask your assistant, typed or out loud.** It walks you through the Review queue, approves what you confirm, and tells you how much you can reimburse yourself.
+
+![An AI assistant connected to HSA Locker: on a laptop it lists the four receipts waiting for review and approves two; on a phone it reports a new emailed receipt and how much is ready to withdraw](docs/screenshots/ai-chat.png)
+
 One deployment is one household. HSA Locker isn’t tax advice and makes no HIPAA compliance claims.
 
 ## A look around
