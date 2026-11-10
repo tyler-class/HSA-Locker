@@ -109,7 +109,11 @@ export function BalanceLines({ data, ticks = 6 }: { data: LinePoint[]; ticks?: n
       .map((d, j) => `L${x(n - 1 - j)},${y(d.b)}`)
       .join('') +
     'Z';
-  const every = Math.max(1, Math.ceil(n / ticks));
+  // No more labels than fit (about one per 72px), so phones don't get a pile-up.
+  const every = Math.max(
+    1,
+    Math.ceil(n / Math.min(ticks, Math.max(2, Math.floor((W - pl - pr) / 72)))),
+  );
   // Callers that label only some points (Januaries on a multi-year range) get exactly those.
   const sparse = data.some((d) => !d.label);
   const colW = n > 1 ? (W - pl - pr) / (n - 1) : W - pl - pr;
@@ -134,7 +138,7 @@ export function BalanceLines({ data, ticks = 6 }: { data: LinePoint[]; ticks?: n
           </>
         )}
         {data.map((d, i) =>
-          (sparse ? d.label : i % every === 0 || i === n - 1) ? (
+          (sparse ? d.label : (n - 1 - i) % every === 0) ? (
             <text
               key={'x' + i}
               x={x(i)}
