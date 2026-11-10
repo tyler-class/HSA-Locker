@@ -1,6 +1,6 @@
 # HSA Locker
 
-Keep every medical receipt and EOB for your HSA in one place, and always know how much you can still reimburse yourself. Forward a receipt by email or snap a photo; HSA Locker stores the original, reads it, and adds it to your ledger.
+If you pay medical bills out of pocket and let your HSA grow, the receipts are the whole game. There's no deadline to reimburse yourself, so a bill paid this year can come out tax-free decades from now, as long as you can still prove it. HSA Locker is where that proof lives. Forward a receipt or snap a photo; it keeps the original, reads it, flags anything that doesn't add up, and keeps a running total of what you can still pull out. It's for anyone playing the long game with an HSA who'd rather not bet tax-free money on a desktop folder and good intentions.
 
 [![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/HSA-Locker)
 
