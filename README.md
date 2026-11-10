@@ -2,7 +2,7 @@
 
 Keep every medical receipt and EOB for your HSA in one place, and always know how much you can still reimburse yourself. Forward a receipt by email or snap a photo; HSA Locker stores the original, reads it, and adds it to your ledger.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/HSA-Locker)
+[![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/HSA-Locker)
 
 ![HSA Locker on a laptop and a phone with sample data: Home with the reimbursable, reimbursed and documented totals and the Years table, and Review showing a photographed pharmacy receipt](docs/screenshots/hero.png)
 
@@ -91,7 +91,7 @@ You can also do this in the middle of the next step: Cloudflare asks you to conn
 
 ### 4. Click Deploy
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/HSA-Locker)
+[![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/HSA-Locker)
 
 Sign in to Cloudflare if it asks. You land on a setup page.
 
