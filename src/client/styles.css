@@ -437,14 +437,18 @@
 .ins .pn-grip:active {
   cursor: grabbing;
 }
-.ins .pn:hover .pn-grip,
-.ins .pn:hover .pn-tool {
-  opacity: 0.85;
+@media (hover: hover) and (pointer: fine) {
+  .ins .pn:hover .pn-grip,
+  .ins .pn:hover .pn-tool {
+    opacity: 0.85;
+  }
 }
-.ins .pn-tool:hover,
-.ins .pn-grip:hover {
-  background: var(--chip);
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .ins .pn-tool:hover,
+  .ins .pn-grip:hover {
+    background: var(--chip);
+    opacity: 1;
+  }
 }
 .ins .pn-tools {
   display: flex;
@@ -526,8 +530,10 @@
   background: var(--surface);
   transition: background 0.12s;
 }
-a.stat:hover {
-  background: var(--i-soft);
+@media (hover: hover) and (pointer: fine) {
+  a.stat:hover {
+    background: var(--i-soft);
+  }
 }
 .ins .stat .l {
   margin-bottom: 6px;
@@ -594,9 +600,11 @@ a.stat:hover {
 .ins .chart .hit {
   fill: transparent;
 }
-.ins .chart g:hover > .hit,
-.ins .chart rect.hit:hover {
-  fill: color-mix(in srgb, var(--ink) 4%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .ins .chart g:hover > .hit,
+  .ins .chart rect.hit:hover {
+    fill: color-mix(in srgb, var(--ink) 4%, transparent);
+  }
 }
 .ins .chart .ln {
   fill: none;
@@ -771,8 +779,10 @@ a.stat:hover {
   color: inherit;
   transition: background 0.12s;
 }
-.ins .rk-link:hover {
-  background: var(--i-soft);
+@media (hover: hover) and (pointer: fine) {
+  .ins .rk-link:hover {
+    background: var(--i-soft);
+  }
 }
 .ins .rk-top {
   display: flex;
@@ -816,6 +826,8 @@ a.stat:hover {
   background: var(--accent);
   opacity: 0.8;
 }
-.ins .rk-link:hover .bar > i {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .ins .rk-link:hover .bar > i {
+    opacity: 1;
+  }
 }
