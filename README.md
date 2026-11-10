@@ -39,7 +39,7 @@ One deployment is one household. HSA Locker isn’t tax advice and makes no HIPA
 
 **Documents.** **Upload** takes PDFs and photos (**Take photo** on a phone). The original opens beside its entry and zooms with a pinch; one that came by email keeps the email it came in.
 
-![Add receipts with Choose files and Take photo, a photographed pharmacy receipt zoomed in, and the original forwarded email with its attachment](docs/screenshots/phone-documents.png)
+![Add receipts with Choose files and Take photo, a photographed pharmacy receipt on its Document tab, and the original forwarded email with its attachment](docs/screenshots/phone-documents.png)
 
 **Review.** Anything that needs a look waits here with the reason, like a provider name that's close to one you have.
 
@@ -48,6 +48,12 @@ One deployment is one household. HSA Locker isn’t tax advice and makes no HIPA
 **Reimbursements.** Select receipts, record the withdrawal, and see each reimbursement's receipts later.
 
 ![Three reimbursable receipts selected, the Record reimbursement sheet with the total to withdraw, and a past reimbursement with its receipts and Undo](docs/screenshots/phone-reimburse.png)
+
+**Insights.** How much you can still reimburse and how it built up, spending by month, quarter or year, how old your unclaimed receipts are, and where the money goes by category, person and provider. Drag panels to arrange them, make them half or full width, or hide them.
+
+![Insights on a computer: Reimbursable, Reimbursed, Documented, In review, Not claimable and the oldest unreimbursed receipt, above the reimbursable-over-time chart](docs/screenshots/insights.png)
+
+![Insights on a phone: the at-a-glance tiles, then reimbursable over time and spending by month](docs/screenshots/phone-insights.png)
 
 **Providers and categories.** Both fill in from your receipts. **Might be the same** asks whether a near-miss name is a provider you already have.
 
