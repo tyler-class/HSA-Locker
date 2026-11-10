@@ -130,6 +130,13 @@ export interface Reimbursement {
   entry_count: number;
 }
 
+/** One panel on the Insights board: order is the array order. */
+export interface InsightsPanel {
+  id: string;
+  size: 'half' | 'full';
+  hidden: boolean;
+}
+
 export interface Settings {
   year_basis: YearBasis;
   hsa_cards: string[];
@@ -150,6 +157,8 @@ export interface Settings {
   notify_daily: boolean;
   /** Push: the Reimbursable milestone, in cents (one amount for the household). */
   notify_milestone_cents: number;
+  /** Insights panel order, width and visibility. Unknown or missing panels use defaults. */
+  insights_layout: InsightsPanel[];
 }
 
 export interface AiInfo {

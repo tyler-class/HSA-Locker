@@ -13,6 +13,7 @@ const TABS: GlassTab[] = [
   ['/', 'Home', 'home'],
   ['/ledger', 'Ledger', 'receipt'],
   ['/review', 'Review', 'search'],
+  ['/insights', 'Insights', 'chart'],
   ['/settings', 'Settings', 'settings'],
 ];
 
@@ -25,7 +26,8 @@ function tabRoot(path: string): string | null {
 }
 
 function activeTab(path: string): string {
-  for (const p of ['/ledger', '/review', '/settings']) if (path.startsWith(p)) return p;
+  for (const p of ['/ledger', '/review', '/insights', '/settings'])
+    if (path.startsWith(p)) return p;
   if (path.startsWith('/reimbursements')) return '/ledger';
   return '/';
 }

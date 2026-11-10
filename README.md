@@ -18,6 +18,7 @@ It's also MCP-enabled, so you can ask an AI assistant what's reimbursable, fix o
 - **Review reminders.** Optionally, a daily email when something is waiting in Review, sent by the Worker itself to an address you verify in Cloudflare.
 - **Email inbox.** Give HSA Locker a private address on a subdomain you own and set your mail to forward receipts and EOBs to it. Gmail’s forwarding confirmation code shows up right in the app.
 - **People and providers.** “Sam”, “Sam Example” and “Example, Sam” are one person; “Lakeside Surgical Suit” on an EOB can be the same provider as on the receipt. A new name on a receipt adds that person to **Settings → People** on its own.
+- **Insights.** Charts that answer the usual HSA questions: how much you can reimburse and how it built up over time, spending by month, quarter or year, how old your unclaimed receipts are, and where the money goes by category, person and provider. Drag panels to arrange them, make them half or full width, or hide them.
 - **Exports.** A CSV of the ledger (any filter), a JSON backup, and a ZIP of every original named by date, person, provider and amount: an audit packet.
 - **AI assistants.** Connect Claude, ChatGPT or any MCP-capable assistant to ask what’s reimbursable or record a reimbursement.
 - **Yours.** It runs on your own Cloudflare account. No third-party scripts. The only thing it sends out is an anonymous daily count you can switch off, and nothing from your receipts or documents is ever in it.

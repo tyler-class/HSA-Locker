@@ -342,3 +342,480 @@
     animation: sheet-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 }
+
+/* ---------- Insights ----------
+   The panel board (ported from Ratio: drag, half/full width, hide) and its charts, in the same
+   visual language as Ratio and Nitrogen: label-over-number tiles, pastel bars with an outline,
+   the period still in progress dashed, slim share tracks along the bottom of ranked rows.
+   Status colours: reimbursed green, reimbursable accent, in review amber, not claimable grey. */
+.ins {
+  --i-soft: color-mix(in srgb, var(--chip) 70%, var(--surface));
+  --i-track: color-mix(in srgb, var(--line) 85%, transparent);
+  --t-reimbursed: var(--ok);
+  --t-outstanding: var(--accent);
+  --t-review: var(--warn);
+  --t-excluded: var(--faint);
+}
+
+/* board */
+.ins .pn-wrap {
+  container: ins-board / inline-size;
+  margin-top: 6px;
+}
+.ins .pn-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-flow: row dense;
+  gap: 14px;
+}
+@container ins-board (min-width: 640px) {
+  .ins .pn-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ins .pn[data-size='full'] {
+    grid-column: 1 / -1;
+  }
+}
+.ins .card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+.ins .pn {
+  min-width: 0;
+  container: ins-panel / inline-size;
+  padding: 16px 20px 20px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 1px 1px rgb(0 0 0 / 0.02);
+}
+.ins .pn-h {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 -8px 12px -10px;
+}
+.ins .pn-t {
+  flex: 1;
+  min-width: 0;
+  padding-top: 5px;
+}
+.ins .pn-t h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ins .pn-t .sub {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--soft);
+}
+.ins .pn-actions {
+  display: flex;
+  margin: -2px 0 14px;
+}
+.ins .pn-grip,
+.ins .pn-tool {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--soft);
+  opacity: 0.5;
+}
+.ins .pn-grip {
+  cursor: grab;
+  touch-action: none;
+}
+.ins .pn-grip:active {
+  cursor: grabbing;
+}
+.ins .pn:hover .pn-grip,
+.ins .pn:hover .pn-tool {
+  opacity: 0.85;
+}
+.ins .pn-tool:hover,
+.ins .pn-grip:hover {
+  background: var(--chip);
+  opacity: 1;
+}
+.ins .pn-tools {
+  display: flex;
+  gap: 2px;
+}
+.ins .pn-size {
+  display: none;
+}
+/* Width does nothing in one column, so the toggle shows only when the board has two. */
+@container ins-board (min-width: 640px) {
+  .ins .pn-size {
+    display: inline-flex;
+  }
+}
+.ins .pn-ph {
+  opacity: 0.35;
+  box-shadow: none;
+  border-style: dashed;
+}
+.ins .pn-overlay {
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.18);
+  cursor: grabbing;
+}
+.ins .pn-hidden {
+  margin-top: 20px;
+}
+.ins .pn-hidden summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--soft);
+  padding: 6px 2px;
+}
+.ins .pn-hidden .card {
+  margin-top: 8px;
+  padding: 4px 8px 4px 16px;
+}
+.ins .pn-hid-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  font-size: 14px;
+}
+.ins .pn-hid-row + .pn-hid-row {
+  border-top: 1px solid var(--i-track);
+}
+.ins .pn-hid-row .pn-tool {
+  opacity: 0.85;
+}
+.ins .empty {
+  margin: 0;
+  padding: 24px 8px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--soft);
+}
+
+/* tiles: label on top, big number, quiet sub-line */
+.ins .stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@container ins-panel (min-width: 560px) {
+  .ins .stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.ins .stat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 12px 14px 13px;
+  border: 1px solid var(--i-track);
+  border-radius: 12px;
+  background: var(--surface);
+  transition: background 0.12s;
+}
+a.stat:hover {
+  background: var(--i-soft);
+}
+.ins .stat .l {
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--soft);
+}
+.ins .stat .v {
+  /* Scales with the panel so amounts never cut off two-up on a phone. */
+  font-size: clamp(19px, 6.2cqi, 26px);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ins .stat .d {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* toggles inside panels: a track that shows on the card in both themes */
+.ins .pn [role='tablist'] {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.ins .pn [role='tablist'] > span {
+  background: color-mix(in srgb, var(--ink) 4%, var(--surface));
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.14),
+    0 0 0 1px color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+/* charts */
+.ins .chart-box {
+  width: 100%;
+  overflow: hidden;
+}
+.ins .chart-box > svg {
+  display: block;
+}
+.ins .chart text {
+  fill: var(--faint);
+  font-size: 10.5px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.ins .chart .vl {
+  fill: var(--soft);
+  font-weight: 500;
+}
+.ins .chart .ax {
+  stroke: var(--i-track);
+}
+.ins .chart .gl {
+  stroke: var(--i-track);
+  opacity: 0.7;
+}
+.ins .chart .hit {
+  fill: transparent;
+}
+.ins .chart g:hover > .hit,
+.ins .chart rect.hit:hover {
+  fill: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+.ins .chart .ln {
+  fill: none;
+  stroke-width: 2px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.ins .chart .ln-a {
+  stroke: var(--t-outstanding);
+}
+.ins .chart .ln-b {
+  stroke: var(--t-reimbursed);
+}
+.ins .chart .band {
+  fill: color-mix(in srgb, var(--t-outstanding) 12%, transparent);
+}
+.ins .chart .end {
+  stroke: var(--surface);
+  stroke-width: 2px;
+}
+.ins .chart .end-a {
+  fill: var(--t-outstanding);
+}
+.ins .chart .end-b {
+  fill: var(--t-reimbursed);
+}
+/* bars: pastel fill with a solid outline; the period still in progress dashed */
+.ins .chart .bar {
+  stroke-width: 1.25px;
+  rx: 4px;
+  --c: var(--t-outstanding);
+  fill: color-mix(in srgb, var(--c) 22%, var(--surface));
+  stroke: var(--c);
+}
+.ins .chart .bar.tone-reimbursed {
+  --c: var(--t-reimbursed);
+}
+.ins .chart .bar.tone-review {
+  --c: var(--t-review);
+}
+.ins .chart .bar.tone-excluded {
+  --c: var(--t-excluded);
+}
+.ins .chart .current .bar {
+  stroke-dasharray: 3 2.5;
+  fill: color-mix(in srgb, var(--c) 10%, var(--surface));
+}
+
+/* legend */
+.ins .legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--soft);
+}
+.ins .legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ins .legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2.5px;
+}
+
+/* swatches (legend, share bar, age rows) */
+.ins .tone-reimbursed {
+  background: var(--t-reimbursed);
+}
+.ins .tone-outstanding,
+.ins .tone-claimable {
+  background: var(--t-outstanding);
+}
+.ins .tone-review {
+  background: var(--t-review);
+}
+.ins .tone-excluded {
+  background: var(--t-excluded);
+}
+.ins .tone-band {
+  background: color-mix(in srgb, var(--t-outstanding) 22%, var(--surface));
+}
+.ins .tone-age1 {
+  background: color-mix(in srgb, var(--accent) 28%, var(--surface));
+}
+.ins .tone-age2 {
+  background: color-mix(in srgb, var(--accent) 46%, var(--surface));
+}
+.ins .tone-age3 {
+  background: color-mix(in srgb, var(--accent) 64%, var(--surface));
+}
+.ins .tone-age4 {
+  background: color-mix(in srgb, var(--accent) 82%, var(--surface));
+}
+.ins .tone-age5 {
+  background: var(--accent);
+}
+.ins .tone-age0 {
+  background: var(--track);
+}
+
+/* segmented share bar */
+.ins .share {
+  display: flex;
+  gap: 4px;
+  height: 10px;
+  margin: 4px 0 14px;
+}
+.ins .share > span {
+  flex-basis: 0;
+  min-width: 6px;
+  border-radius: 99px;
+}
+.ins .empty-share {
+  border-radius: 99px;
+  background: var(--i-track);
+}
+.ins .rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ins .rows li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 14px;
+  border-top: 1px solid var(--i-track);
+}
+.ins .rows li:first-child {
+  border-top: 0;
+}
+.ins .rows li.none {
+  color: var(--faint);
+}
+.ins .rows i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2.5px;
+}
+.ins .rows .rl {
+  flex: 1;
+  min-width: 0;
+}
+.ins .rows .rn {
+  font-size: 12.5px;
+  color: var(--faint);
+}
+.ins .rows .rv {
+  min-width: 76px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ranked rows: name and value, sub-line, slim share track along the bottom */
+.ins .rank {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ins .rk {
+  display: flex;
+  flex-direction: column;
+  margin: 0 -10px;
+  padding: 8px 10px 9px;
+  border-radius: 10px;
+  color: inherit;
+  transition: background 0.12s;
+}
+.ins .rk-link:hover {
+  background: var(--i-soft);
+}
+.ins .rk-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.ins .rk-l {
+  min-width: 0;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ins .rk-v {
+  font-size: 13.5px;
+  color: var(--soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ins .rk-s {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ins .rk .bar {
+  display: block;
+  height: 4px;
+  margin-top: 7px;
+  border-radius: 99px;
+  background: var(--i-track);
+  overflow: hidden;
+}
+.ins .rk .bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+  opacity: 0.8;
+}
+.ins .rk-link:hover .bar > i {
+  opacity: 1;
+}
