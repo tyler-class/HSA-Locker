@@ -1,6 +1,10 @@
 # HSA Locker
 
-Every medical receipt and EOB for your HSA, kept, read and totaled in one place. Forward receipts to your own dedicated email inbox or snap a photo, and HSA Locker keeps the original, reads it (text from PDFs, a vision model for photos and scans) and turns it into structured data you can rely on: date, patient, provider, amount and card. Anything it isn't sure about gets flagged for your review instead of slipping into your totals. It works whether you reimburse yourself as you go or follow the shoebox method: pay out of pocket, let the HSA grow, and pull the money out tax-free years later, as long as you can still prove the expense. That proof is the whole point, and this is where it lives. It's also MCP-enabled, so you can ask an AI assistant what's reimbursable, fix or approve entries, record a reimbursement, or dig into your spending on the fly.
+Every medical receipt and EOB for your HSA, kept, read and totaled in one place. Forward receipts to your own dedicated email inbox or snap a photo, and HSA Locker keeps the original, reads it (text from PDFs, a vision model for photos and scans) and turns it into structured data you can rely on: date, patient, provider, amount and card. Anything it isn't sure about gets flagged for your review instead of slipping into your totals.
+
+It works whether you reimburse yourself as you go or follow the shoebox method: pay out of pocket, let the HSA grow, and pull the money out tax-free years later, as long as you can still prove the expense. That proof is the whole point, and this is where it lives.
+
+It's also MCP-enabled, so you can ask an AI assistant what's reimbursable, fix or approve entries, record a reimbursement, or dig into your spending on the fly.
 
 [![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/HSA-Locker)
 
