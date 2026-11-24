@@ -30,6 +30,7 @@ import {
 import { filePrompt, MAX_TEXT_CHARS, REPAIR_PROMPT, systemPrompt, textPrompt } from './prompt';
 import {
   getProvider,
+  loadKeyConfig,
   ProviderError,
   toBase64,
   shortReason,
@@ -535,7 +536,7 @@ async function readAndStore(
   const quick = !!opts.quick;
   const doc = await claim(db, id, quick);
   if (!doc) return 'skipped';
-  const provider = getProvider(env);
+  const provider = getProvider(env, await loadKeyConfig(db));
   const now = nowIso();
   const started = Date.now();
   const ctx: ReadContext = {
