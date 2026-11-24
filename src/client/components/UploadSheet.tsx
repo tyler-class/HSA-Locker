@@ -3,9 +3,10 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ACCEPTED_MIME, MAX_UPLOAD_BYTES } from '@shared/lookups';
 import type { DocumentSummary } from '@shared/types';
-import { api, errorMessage, uploadFile } from '../lib/api';
+import { api, errorMessage, uploadFile, uploadReadingCopy } from '../lib/api';
 import { bytes } from '../lib/format';
 import { useRefreshData } from '../lib/queries';
+import { isPhoto, makeReadingCopy } from '../lib/readingCopy';
 import { Icon } from './Icon';
 import { cx, GhostButton, PrimaryButton, Sheet } from './ui';
 
@@ -68,8 +69,12 @@ export function UploadSheet({ open, onClose }: { open: boolean; onClose: () => v
         continue;
       }
       update(it.key, { state: 'uploading' });
+      // A photo's smaller reading copy is made while the original uploads, then sent after it.
+      const copy = isPhoto(it.file) ? makeReadingCopy(it.file) : Promise.resolve(null);
       try {
         const r = await uploadFile(it.file, (p) => update(it.key, { progress: p }));
+        const blob = r.duplicate || !r.document ? null : await copy;
+        if (blob) await uploadReadingCopy(r.document.id, blob).catch(() => {});
         update(it.key, {
           state: r.duplicate ? 'duplicate' : 'reading',
           docId: r.document?.id,
