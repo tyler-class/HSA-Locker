@@ -97,7 +97,7 @@ async function claim(db: D1Database, id: string, quick: boolean): Promise<DocRow
      WHERE id = ? AND (
        (status = 'pending' AND (next_attempt_at IS NULL OR next_attempt_at <= ?))
        OR (status = 'failed' AND attempts < ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?))
-       OR (status = 'processing' AND updated_at < ?)
+       OR (status = 'processing' AND attempts < ? AND updated_at < ?)
      )${quick ? ` AND ${QUICK_MIME_SQL}` : ''}
      RETURNING id, file_key, filename, mime, attempts, status`,
     now,
@@ -105,8 +105,28 @@ async function claim(db: D1Database, id: string, quick: boolean): Promise<DocRow
     now,
     MAX_ATTEMPTS,
     now,
+    MAX_ATTEMPTS,
     stale,
   );
+}
+
+/**
+ * A read cut off mid-way on its last attempt is never taken again: after MAX_ATTEMPTS tries the
+ * document stops and goes to Review as "couldn't read it", like any other read that ran out.
+ */
+export async function giveUpAbandoned(db: D1Database): Promise<number> {
+  const now = nowIso();
+  const stale = new Date(Date.now() - STALE_MINUTES * 60_000).toISOString();
+  const r = await db
+    .prepare(
+      `UPDATE documents SET status = 'needs_review', review_reasons_json = ?,
+         error = COALESCE(error, 'timeout: the read was cut off'), next_attempt_at = NULL,
+         processed_at = ?, updated_at = ?
+       WHERE status = 'processing' AND attempts >= ? AND updated_at < ?`,
+    )
+    .bind(JSON.stringify(['extraction_failed']), now, now, MAX_ATTEMPTS, stale)
+    .run();
+  return r.meta.changes ?? 0;
 }
 
 /** Ids due for processing, oldest first. */
@@ -123,12 +143,13 @@ export async function dueDocuments(
       `SELECT id FROM documents WHERE (
          (status = 'pending' AND (next_attempt_at IS NULL OR next_attempt_at <= ?))
          OR (status = 'failed' AND attempts < ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?))
-         OR (status = 'processing' AND updated_at < ?)
+         OR (status = 'processing' AND attempts < ? AND updated_at < ?)
        )${quick ? ` AND ${QUICK_MIME_SQL}` : ''}
        ORDER BY received_at LIMIT ?`,
       now,
       MAX_ATTEMPTS,
       now,
+      MAX_ATTEMPTS,
       stale,
       limit,
     )
@@ -635,6 +656,7 @@ export async function sweep(
   limit = 5,
   opts: ProcessOptions = {},
 ): Promise<number> {
+  await giveUpAbandoned(env.DB);
   const ids = await dueDocuments(env.DB, limit, opts.quick);
   let done = 0;
   for (const id of ids) {

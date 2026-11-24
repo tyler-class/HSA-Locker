@@ -3,6 +3,7 @@
 // no SDKs. The extraction model gets no tools and its output is only ever parsed as data.
 import { EXTRACTION_JSON_SCHEMA } from '@shared/extraction';
 import { bytesToBinary, fromBase64, toBase64 } from '../bytes';
+import { clairicRead } from './clairic';
 
 export { toBase64 };
 
@@ -182,27 +183,35 @@ function workersAi(env: Cloudflare.Env): LlmProvider {
         return { text: workersAiText(out), model };
       };
       if (!call.file) return runOnce(WORKERS_AI_TEXT_MODEL);
-      try {
-        return await runOnce(WORKERS_AI_VISION_MODEL);
-      } catch (first) {
-        // A photo the first model couldn't answer: one try with the second before giving up.
-        if (!(first instanceof ProviderError) || !FALLBACK_ON.has(first.message)) throw first;
+      // A photo: Clairic first (typed fields, no JSON to repair), then the general vision
+      // model, then the second one. A repair retry goes straight to the general model.
+      const tries: (() => Promise<{ text: string; model: string }>)[] = [
+        ...(call.repair ? [] : [() => clairicRead(env, call.file!)]),
+        () => runOnce(WORKERS_AI_VISION_MODEL),
+        () => runOnce(WORKERS_AI_VISION_FALLBACK),
+      ];
+      const failed: ProviderError[] = [];
+      for (const attempt of tries) {
         try {
-          return await runOnce(WORKERS_AI_VISION_FALLBACK);
-        } catch (second) {
-          if (!(second instanceof ProviderError)) throw second;
-          const both = [first, second]
-            .map((e) => [e.message, e.detail].filter(Boolean).join(' '))
-            .join('; then ');
-          throw new ProviderError(second.message, second.retryable, both.slice(0, 160));
+          return await attempt();
+        } catch (e) {
+          if (!(e instanceof ProviderError)) throw e;
+          failed.push(e);
+          // Only a reply that was empty, refused or errored moves on to the next model.
+          if (!FALLBACK_ON.has(e.message)) break;
         }
       }
+      const last = failed[failed.length - 1]!;
+      const all = failed
+        .map((e) => [e.message, e.detail].filter(Boolean).join(' '))
+        .join('; then ');
+      throw new ProviderError(last.message, last.retryable, all.slice(0, 200));
     },
   };
 }
 
 /** First-model failures on a photo that the second model gets a try at. */
-const FALLBACK_ON = new Set(['empty_reply', 'json_mode', 'workers_ai_error']);
+const FALLBACK_ON = new Set(['empty_reply', 'json_mode', 'workers_ai_error', 'clairic_skip']);
 
 /**
  * Workers AI replies as {response} (string or already-parsed object), OpenAI-style choices (the
@@ -411,15 +420,61 @@ function fake(): LlmProvider {
   };
 }
 
-/** The active provider from Worker secrets. Misconfiguration falls back to Workers AI. */
+/** A key the provider refused (401/403): skipped for the rest of this isolate's life. */
+const refusedKeys = new Set<string>();
+
+/** True for a provider's "this key isn't valid" reply. */
+export function isAuthFailure(e: unknown): boolean {
+  if (!(e instanceof ProviderError)) return false;
+  if (e.message === 'http_401' || e.message === 'http_403') return true;
+  return /auth|api_key|permission/i.test(e.detail ?? '') && e.message === 'http_400';
+}
+
+/**
+ * A bring-your-own-key provider, first, with Workers AI behind it: if the key is refused, this
+ * read (and later ones) go to Workers AI instead. Other failures are the provider's own and
+ * count as a failed attempt as usual.
+ */
+function withFallback(primary: LlmProvider, backup: LlmProvider, key: string): LlmProvider {
+  return {
+    ...primary,
+    async complete(call) {
+      const useBackup = () => {
+        if (call.file && !backup.accepts(call.file.mime))
+          throw new ProviderError('key_refused', false, `${primary.id} refused the API key`);
+        return backup.complete(call);
+      };
+      if (refusedKeys.has(key)) return useBackup();
+      try {
+        return await primary.complete(call);
+      } catch (e) {
+        if (!isAuthFailure(e)) throw e;
+        console.warn(`${primary.id} refused the API key; reading with Workers AI`);
+        refusedKeys.add(key);
+        return useBackup();
+      }
+    },
+  };
+}
+
+/**
+ * The active provider from Worker secrets: a configured external key first, falling back to
+ * Workers AI if the key is refused. Misconfiguration falls back to Workers AI.
+ */
 export function getProvider(env: Cloudflare.Env): LlmProvider {
   const p = (env.LLM_PROVIDER ?? '').trim().toLowerCase();
   const key = env.LLM_API_KEY?.trim();
   if (p === 'fake') return fake();
-  if (key && p === 'anthropic') return anthropic(env, key);
-  if (key && p === 'openai') return openai(env, key);
-  if (key && (p === 'gemini' || p === 'google')) return gemini(env, key);
-  return workersAi(env);
+  const external = !key
+    ? null
+    : p === 'anthropic'
+      ? anthropic(env, key)
+      : p === 'openai'
+        ? openai(env, key)
+        : p === 'gemini' || p === 'google'
+          ? gemini(env, key)
+          : null;
+  return external && key ? withFallback(external, workersAi(env), key) : workersAi(env);
 }
 
 /** True when LLM_PROVIDER names a provider but the key is missing (shown in Settings → AI). */
