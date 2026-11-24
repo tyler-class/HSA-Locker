@@ -225,6 +225,29 @@ describe('reading copies', () => {
     expect(await env.FILES.head(readingCopyKey(id))).toBeNull();
   });
 
+  it('a copy sent for a photo waiting on a retry makes it due now', async () => {
+    const api = await session();
+    const up = await upload(
+      api,
+      fakeJpeg(receiptExtraction({ appointment_date: '2024-11-08', amount: '12.00' })),
+      'IMG_5002.jpg',
+      'image/jpeg',
+    );
+    const id = up.data.document.id;
+    // As if its first read had been cut off and failed: retry not due for another 8 minutes.
+    const later = new Date(Date.now() + 8 * 60_000).toISOString();
+    await env.DB.prepare(
+      "UPDATE documents SET status = 'failed', attempts = 1, next_attempt_at = ? WHERE id = ?",
+    )
+      .bind(later, id)
+      .run();
+    const copy = fakeJpeg(receiptExtraction({ appointment_date: '2024-11-08', amount: '12.00' }));
+    expect((await postCopy(api.cookie, id, copy)).status).toBe(200);
+    expect((await row(id))!.next_attempt_at).toBeNull();
+    await sweep(env, 20);
+    expect(await amounts(id)).toEqual([1200]);
+  });
+
   it('takes only a JPEG, only for a photo, and only from this origin', async () => {
     const api = await session();
     const up = await upload(

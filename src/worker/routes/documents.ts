@@ -92,6 +92,12 @@ documents.post('/documents/:id/reading-copy', async (c) => {
     httpMetadata: { contentType: 'image/jpeg' },
     customMetadata: { document_id: String(row.id), reading_copy: '1' },
   });
+  // A photo waiting on a retry (say its first read was cut off) is due again now, from the copy.
+  await c.env.DB.prepare(
+    "UPDATE documents SET next_attempt_at = NULL WHERE id = ? AND status IN ('pending', 'failed')",
+  )
+    .bind(String(row.id))
+    .run();
   return c.json({ ok: true });
 });
 
