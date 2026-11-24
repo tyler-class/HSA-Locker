@@ -251,8 +251,8 @@ export function replyShape(o: unknown): string {
 
 // ---------- Anthropic ----------
 
-function anthropic(env: Cloudflare.Env, key: string): LlmProvider {
-  const model = env.LLM_MODEL || DEFAULT_MODELS.anthropic;
+function anthropic(env: Cloudflare.Env, key: string, chosen?: string): LlmProvider {
+  const model = chosen || DEFAULT_MODELS.anthropic;
   return {
     id: 'anthropic',
     textModel: model,
@@ -298,8 +298,8 @@ function anthropic(env: Cloudflare.Env, key: string): LlmProvider {
 
 // ---------- OpenAI ----------
 
-function openai(env: Cloudflare.Env, key: string): LlmProvider {
-  const model = env.LLM_MODEL || DEFAULT_MODELS.openai;
+function openai(env: Cloudflare.Env, key: string, chosen?: string): LlmProvider {
+  const model = chosen || DEFAULT_MODELS.openai;
   return {
     id: 'openai',
     textModel: model,
@@ -346,8 +346,8 @@ function openai(env: Cloudflare.Env, key: string): LlmProvider {
 
 // ---------- Gemini ----------
 
-function gemini(env: Cloudflare.Env, key: string): LlmProvider {
-  const model = env.LLM_MODEL || DEFAULT_MODELS.gemini;
+function gemini(env: Cloudflare.Env, key: string, chosen?: string): LlmProvider {
+  const model = chosen || DEFAULT_MODELS.gemini;
   return {
     id: 'gemini',
     textModel: model,
@@ -457,24 +457,90 @@ function withFallback(primary: LlmProvider, backup: LlmProvider, key: string): L
   };
 }
 
-/**
- * The active provider from Worker secrets: a configured external key first, falling back to
- * Workers AI if the key is refused. Misconfiguration falls back to Workers AI.
- */
-export function getProvider(env: Cloudflare.Env): LlmProvider {
-  const p = (env.LLM_PROVIDER ?? '').trim().toLowerCase();
+/** A key saved in the app (Settings → Reading documents), from D1. Never sent to the browser. */
+export interface KeyConfig {
+  provider: string;
+  key: string;
+  model?: string | null;
+}
+
+export const KEY_PROVIDERS = ['anthropic', 'openai', 'gemini'] as const;
+export type KeyProvider = (typeof KEY_PROVIDERS)[number];
+
+/** The key saved in the app, if any. */
+export async function loadKeyConfig(db: D1Database): Promise<KeyConfig | null> {
+  const rows = await db
+    .prepare(
+      "SELECT key, value FROM settings WHERE key IN ('llm_provider', 'llm_api_key', 'llm_model')",
+    )
+    .all<{ key: string; value: string }>();
+  const m = new Map((rows.results ?? []).map((r) => [r.key, r.value]));
+  const provider = m.get('llm_provider')?.trim().toLowerCase();
+  const key = m.get('llm_api_key')?.trim();
+  return provider && key ? { provider, key, model: m.get('llm_model') || null } : null;
+}
+
+/** Where the key in use comes from: saved in the app, a Worker secret, or none (Workers AI). */
+export function keyConfig(
+  env: Cloudflare.Env,
+  saved: KeyConfig | null,
+): (KeyConfig & { source: 'app' | 'secret' }) | null {
+  if (saved) return { ...saved, source: 'app' };
+  const provider = (env.LLM_PROVIDER ?? '').trim().toLowerCase();
   const key = env.LLM_API_KEY?.trim();
-  if (p === 'fake') return fake();
-  const external = !key
-    ? null
-    : p === 'anthropic'
-      ? anthropic(env, key)
-      : p === 'openai'
-        ? openai(env, key)
-        : p === 'gemini' || p === 'google'
-          ? gemini(env, key)
-          : null;
-  return external && key ? withFallback(external, workersAi(env), key) : workersAi(env);
+  return provider && key ? { provider, key, model: env.LLM_MODEL || null, source: 'secret' } : null;
+}
+
+function external(env: Cloudflare.Env, c: KeyConfig): LlmProvider | null {
+  const model = c.model || undefined;
+  if (c.provider === 'anthropic') return anthropic(env, c.key, model);
+  if (c.provider === 'openai') return openai(env, c.key, model);
+  if (c.provider === 'gemini' || c.provider === 'google') return gemini(env, c.key, model);
+  return null;
+}
+
+/**
+ * The active provider: a key saved in the app first, else one set as a Worker secret, falling
+ * back to Workers AI if the provider refuses it; with no key, Workers AI.
+ */
+export function getProvider(env: Cloudflare.Env, saved: KeyConfig | null = null): LlmProvider {
+  if ((env.LLM_PROVIDER ?? '').trim().toLowerCase() === 'fake') return fake();
+  const c = keyConfig(env, saved);
+  const ext = c && external(env, c);
+  return ext && c ? withFallback(ext, workersAi(env), c.key) : workersAi(env);
+}
+
+/**
+ * Asks the provider whether it takes this key, by listing its models (no document is sent, and
+ * nothing is billed). "unreachable" when the provider couldn't be asked.
+ */
+export async function checkKey(
+  provider: KeyProvider,
+  key: string,
+): Promise<'ok' | 'refused' | 'unreachable'> {
+  const req =
+    provider === 'anthropic'
+      ? new Request('https://api.anthropic.com/v1/models?limit=1', {
+          headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        })
+      : provider === 'openai'
+        ? new Request('https://api.openai.com/v1/models', {
+            headers: { Authorization: `Bearer ${key}` },
+          })
+        : new Request('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', {
+            headers: { 'x-goog-api-key': key },
+          });
+  let res: Response;
+  try {
+    res = await fetch(req);
+  } catch {
+    return 'unreachable';
+  }
+  await res.body?.cancel().catch(() => {});
+  if (res.ok) return 'ok';
+  // Gemini answers a bad key with 400 API_KEY_INVALID.
+  if (res.status === 400 || res.status === 401 || res.status === 403) return 'refused';
+  return 'unreachable';
 }
 
 /** True when LLM_PROVIDER names a provider but the key is missing (shown in Settings → AI). */

@@ -216,7 +216,9 @@ Details are in [docs/email-setup.md](docs/email-setup.md).
 
 ## Choose the AI model
 
-By default documents are read with Workers AI inside your Cloudflare account; nothing to set up. To use your own Anthropic, OpenAI or Gemini key instead, add Worker secrets in the Cloudflare dashboard (**Workers & Pages → hsa-locker → Settings → Variables and Secrets**):
+By default documents are read with Workers AI inside your Cloudflare account; nothing to set up. To use your own Anthropic, OpenAI or Gemini key instead, open **Settings → Reading documents → Use your own key**, pick the provider and paste the key. The app asks the provider whether it takes the key before saving it; it's kept in your copy's database, never shown again, never sent to the browser and never put in a backup. **Remove key** goes back to Workers AI. If the provider later refuses the key, reading falls back to Workers AI on its own.
+
+You can set the key as Worker secrets instead (**Workers & Pages → hsa-locker → Settings → Variables and Secrets**); a key saved in the app is used in their place:
 
 | Secret         | Value                                   |
 | -------------- | --------------------------------------- |
@@ -224,7 +226,7 @@ By default documents are read with Workers AI inside your Cloudflare account; no
 | `LLM_API_KEY`  | your API key                            |
 | `LLM_MODEL`    | optional, to override the default model |
 
-With your own key, documents (which contain health information) are sent to that company. Keys live only in Worker secrets and can’t be seen or changed from the app. **Settings → Reading documents → Test extraction** checks the setup. Optional: set `AI_GATEWAY_ID` to route Workers AI calls through an [AI Gateway](https://developers.cloudflare.com/ai-gateway/).
+With your own key, documents (which contain health information) are sent to that company. **Settings → Reading documents → Test extraction** checks the setup. Optional: set `AI_GATEWAY_ID` to route Workers AI calls through an [AI Gateway](https://developers.cloudflare.com/ai-gateway/).
 
 Scanned PDFs (no text layer) can’t be read by Workers AI; they go to Review so you can type them in or upload photos of the pages. Anthropic, OpenAI and Gemini keys read scanned PDFs directly.
 
