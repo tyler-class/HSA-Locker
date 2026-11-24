@@ -10,6 +10,14 @@ export { toBase64 };
  *  supports response_format json_schema, and is what toMarkdown itself uses for images. */
 export const WORKERS_AI_TEXT_MODEL = '@cf/google/gemma-4-26b-a4b-it';
 export const WORKERS_AI_VISION_MODEL = '@cf/google/gemma-4-26b-a4b-it';
+/**
+ * A second Workers AI model that reads images (Llama 4 Scout: vision and JSON mode, per the
+ * catalog). A photo whose first read comes back empty or unusable is tried once with it before
+ * the attempt counts as failed: on real phone photos gemma has replied with nothing at all.
+ */
+export const WORKERS_AI_VISION_FALLBACK = '@cf/meta/llama-4-scout-17b-16e-instruct';
+/** Output room for a read: a reasoning model can spend much of it before it answers. */
+const WORKERS_AI_MAX_TOKENS = { text: 4096, vision: 8192 } as const;
 
 const DEFAULT_MODELS = {
   anthropic: 'claude-sonnet-5-5',
@@ -122,7 +130,6 @@ function workersAi(env: Cloudflare.Env): LlmProvider {
     thirdParty: false,
     accepts: (mime) => ['image/png', 'image/jpeg', 'image/webp'].includes(mime),
     async complete(call) {
-      const model = call.file ? WORKERS_AI_VISION_MODEL : WORKERS_AI_TEXT_MODEL;
       const userContent = call.file
         ? [
             { type: 'text', text: call.user },
@@ -142,50 +149,95 @@ function workersAi(env: Cloudflare.Env): LlmProvider {
       }
       const input = {
         messages,
-        max_tokens: 4096,
+        max_tokens: call.file ? WORKERS_AI_MAX_TOKENS.vision : WORKERS_AI_MAX_TOKENS.text,
         temperature: 0.1,
         response_format: {
           type: 'json_schema',
           json_schema: { name: 'extraction', schema: EXTRACTION_JSON_SCHEMA, strict: true },
         },
       };
-      let out: unknown;
+      const runOnce = async (model: string) => {
+        let out: unknown;
+        try {
+          const run = env.AI.run as unknown as (
+            m: string,
+            i: unknown,
+            o?: unknown,
+          ) => Promise<unknown>;
+          out = await run.call(
+            env.AI,
+            model,
+            input,
+            env.AI_GATEWAY_ID ? { gateway: { id: env.AI_GATEWAY_ID } } : undefined,
+          );
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : '';
+          // "JSON Mode couldn't be met" and capacity errors are worth another try later.
+          throw new ProviderError(
+            /json mode/i.test(msg) ? 'json_mode' : 'workers_ai_error',
+            true,
+            shortReason(e),
+          );
+        }
+        return { text: workersAiText(out), model };
+      };
+      if (!call.file) return runOnce(WORKERS_AI_TEXT_MODEL);
       try {
-        const run = env.AI.run as unknown as (
-          m: string,
-          i: unknown,
-          o?: unknown,
-        ) => Promise<unknown>;
-        out = await run.call(
-          env.AI,
-          model,
-          input,
-          env.AI_GATEWAY_ID ? { gateway: { id: env.AI_GATEWAY_ID } } : undefined,
-        );
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : '';
-        // "JSON Mode couldn't be met" and capacity errors are worth another try later.
-        throw new ProviderError(
-          /json mode/i.test(msg) ? 'json_mode' : 'workers_ai_error',
-          true,
-          shortReason(e),
-        );
+        return await runOnce(WORKERS_AI_VISION_MODEL);
+      } catch (first) {
+        // A photo the first model couldn't answer: one try with the second before giving up.
+        if (!(first instanceof ProviderError) || !FALLBACK_ON.has(first.message)) throw first;
+        try {
+          return await runOnce(WORKERS_AI_VISION_FALLBACK);
+        } catch (second) {
+          if (!(second instanceof ProviderError)) throw second;
+          const both = [first, second]
+            .map((e) => [e.message, e.detail].filter(Boolean).join(' '))
+            .join('; then ');
+          throw new ProviderError(second.message, second.retryable, both.slice(0, 160));
+        }
       }
-      return { text: workersAiText(out), model };
     },
   };
 }
 
-/** Workers AI replies as {response} (string or already-parsed object) or OpenAI-style choices. */
+/** First-model failures on a photo that the second model gets a try at. */
+const FALLBACK_ON = new Set(['empty_reply', 'json_mode', 'workers_ai_error']);
+
+/**
+ * Workers AI replies as {response} (string or already-parsed object), OpenAI-style choices (the
+ * content a string or a list of text parts), or {result: …} around either. An empty reply says
+ * what came back instead, in a few content-free words: "finish=length reasoning keys=choices,usage".
+ */
 export function workersAiText(out: unknown): string {
-  const o = out as {
+  const top = out as { result?: unknown } | null;
+  const o = (top && typeof top === 'object' && 'result' in top ? top.result : out) as {
     response?: unknown;
-    choices?: { message?: { content?: unknown } }[];
-  };
-  const r = o?.response ?? o?.choices?.[0]?.message?.content;
-  if (typeof r === 'string') return r;
+    output_text?: unknown;
+    choices?: { message?: { content?: unknown }; finish_reason?: unknown }[];
+  } | null;
+  const c = o?.choices?.[0]?.message?.content;
+  const fromParts = Array.isArray(c)
+    ? c.map((p) => (p && typeof p === 'object' && 'text' in p ? String(p.text ?? '') : '')).join('')
+    : undefined;
+  const r = o?.response ?? o?.output_text ?? fromParts ?? c;
+  if (typeof r === 'string' && r.trim()) return r;
   if (r && typeof r === 'object') return JSON.stringify(r);
-  throw new ProviderError('empty_reply', true);
+  throw new ProviderError('empty_reply', true, replyShape(o));
+}
+
+/** What a reply held, without its contents: finish reason, whether it reasoned, its keys. */
+export function replyShape(o: unknown): string {
+  if (!o || typeof o !== 'object') return `type=${o === null ? 'null' : typeof o}`;
+  const rec = o as Record<string, unknown>;
+  const choice = (rec.choices as Record<string, unknown>[] | undefined)?.[0];
+  const msg = choice?.message as Record<string, unknown> | undefined;
+  const bits = [
+    typeof choice?.finish_reason === 'string' ? `finish=${choice.finish_reason}` : '',
+    msg && (msg.reasoning_content || msg.reasoning) ? 'reasoning' : '',
+    `keys=${Object.keys(rec).slice(0, 6).join(',')}`,
+  ];
+  return bits.filter(Boolean).join(' ').slice(0, 120);
 }
 
 // ---------- Anthropic ----------
